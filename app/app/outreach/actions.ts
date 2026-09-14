@@ -4,11 +4,13 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireOrgMember } from "@/lib/auth/require-org-member";
 import { logAudit } from "@/lib/audit/log";
+import { checkAutomationAllowed } from "@/lib/automation/guard";
 import { fetchPageContent, pageLinksToDomain } from "@/lib/web/fetch-page";
 import { assessOpportunity } from "@/lib/ai/assess-opportunity";
 import { draftOutreachMessage } from "@/lib/ai/draft-outreach";
 import { searchBrandMentions, CustomSearchError } from "@/lib/google/custom-search";
 import { AiGenerationError } from "@/lib/ai/client";
+import { logAiUsage } from "@/lib/ai/log-usage";
 import type { ActionResult } from "@/app/register/actions";
 import type { BrandProfile, OpportunityType, OpportunityStatus } from "@/types/database";
 
@@ -53,6 +55,9 @@ export async function addOpportunityAction(_prevState: ActionResult, formData: F
   const member = await requireOrgMember(supabase);
   if ("error" in member) return member;
 
+  const automation = await checkAutomationAllowed(supabase, member.orgId);
+  if (!automation.allowed) return { error: automation.reason };
+
   let url = (formData.get("url") as string)?.trim();
   const opportunityType = (formData.get("opportunityType") as OpportunityType) || "other";
   if (!url) return { error: "Enter a URL." };
@@ -65,6 +70,7 @@ export async function addOpportunityAction(_prevState: ActionResult, formData: F
   if (page) {
     try {
       assessment = await assessOpportunity({ page, brandProfile: brand });
+      await logAiUsage(supabase, { orgId: member.orgId, feature: "opportunity_assessment", usage: assessment.usage });
     } catch (err) {
       if (!(err instanceof AiGenerationError)) throw err;
       // Fall through — still save the opportunity even if AI assessment failed.
@@ -127,6 +133,9 @@ export async function draftOutreachAction(_prevState: ActionResult, formData: Fo
   const member = await requireOrgMember(supabase);
   if ("error" in member) return member;
 
+  const automation = await checkAutomationAllowed(supabase, member.orgId);
+  if (!automation.allowed) return { error: automation.reason };
+
   const opportunityId = formData.get("opportunityId") as string;
   const isFollowUp = formData.get("isFollowUp") === "true";
 
@@ -149,6 +158,7 @@ export async function draftOutreachAction(_prevState: ActionResult, formData: Fo
     if (err instanceof AiGenerationError) return { error: err.message };
     throw err;
   }
+  await logAiUsage(supabase, { orgId: member.orgId, feature: "outreach_draft", usage: drafted.usage });
 
   const { error } = await supabase.from("outreach_messages").insert({
     opportunity_id: opportunityId,

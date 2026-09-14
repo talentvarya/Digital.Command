@@ -3,6 +3,7 @@ import { Users, ShieldAlert, Wallet, Hourglass, CheckCircle2, PauseCircle, Calen
 import { createClient } from "@/lib/supabase/server";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
+import { EmergencyFreezePanel } from "@/components/admin/EmergencyFreezePanel";
 import { BUSINESS_TYPE_LABELS } from "@/lib/constants/business";
 import { BILLING_TERM_LABELS } from "@/lib/constants/plans";
 import type { OrganizationStatus } from "@/types/database";
@@ -10,14 +11,15 @@ import type { OrganizationStatus } from "@/types/database";
 export default async function AdminDashboardPage() {
   const supabase = createClient();
 
-  const [{ data: orgs }, { data: verifications }, { data: payments }, { data: subscriptions }, { data: plans }, { data: settings }] =
+  const [{ data: orgs }, { data: verifications }, { data: payments }, { data: subscriptions }, { data: plans }, { data: settings }, { data: systemSettings }] =
     await Promise.all([
-      supabase.from("organizations").select("id, legal_name, business_type, status, created_at").order("created_at", { ascending: false }),
+      supabase.from("organizations").select("id, legal_name, business_type, status, is_sandbox, created_at").order("created_at", { ascending: false }),
       supabase.from("business_verifications").select("org_id, status"),
       supabase.from("payments").select("org_id, status, submitted_at").order("submitted_at", { ascending: false }),
       supabase.from("subscriptions").select("org_id, plan_id, billing_term, start_date, expiry_date"),
       supabase.from("plans").select("id, name"),
       supabase.from("client_settings").select("org_id, automation_status"),
+      supabase.from("system_settings").select("emergency_freeze, frozen_reason, frozen_at").single(),
     ]);
 
   const verificationByOrg = new Map((verifications ?? []).map((v) => [v.org_id, v.status]));
@@ -45,9 +47,16 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-ink-900">Super Admin Dashboard</h1>
-        <p className="text-sm text-ink-500">Review registrations, verify documents and payments, and manage client accounts.</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-ink-900">Super Admin Dashboard</h1>
+          <p className="text-sm text-ink-500">Review registrations, verify documents and payments, and manage client accounts.</p>
+        </div>
+        <EmergencyFreezePanel
+          frozen={systemSettings?.emergency_freeze ?? false}
+          frozenReason={systemSettings?.frozen_reason ?? null}
+          frozenAt={systemSettings?.frozen_at ?? null}
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -95,6 +104,7 @@ export default async function AdminDashboardPage() {
                     <div className="flex items-center gap-2">
                       {org.legal_name}
                       <StatusBadge status={org.status as OrganizationStatus} />
+                      {org.is_sandbox && <StatusBadge status="sandbox" />}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-ink-600">{BUSINESS_TYPE_LABELS[org.business_type as keyof typeof BUSINESS_TYPE_LABELS]}</td>

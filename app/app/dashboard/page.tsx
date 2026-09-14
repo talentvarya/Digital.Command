@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
-import { Search, Link2, MapPin, FileBarChart, Palette, ClipboardList, Handshake, Megaphone } from "lucide-react";
+import { Search, Link2, MapPin, FileBarChart, Palette, ClipboardList, Handshake, Megaphone, Sparkles, HeartPulse, MousePointerClick } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ComingSoonCard } from "@/components/client/ComingSoonCard";
 import { ModuleLinkCard } from "@/components/client/ModuleLinkCard";
+import { MasterStopPanel } from "@/components/client/MasterStopPanel";
 import { BILLING_TERM_LABELS } from "@/lib/constants/plans";
 
 function daysRemaining(expiry: string | null): number | null {
@@ -52,9 +53,12 @@ export default async function ClientDashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-ink-900">{org.legal_name}</h1>
-        <p className="text-sm text-ink-500">Welcome back — here&apos;s where your account stands.</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-ink-900">{org.legal_name}</h1>
+          <p className="text-sm text-ink-500">Welcome back — here&apos;s where your account stands.</p>
+        </div>
+        <MasterStopPanel masterStop={settings?.master_stop ?? false} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -92,6 +96,9 @@ export default async function ClientDashboardPage() {
           <ModuleLinkCard icon={FileBarChart} title="Reports" subtitle="Real data, AI-written summary — every 7 or 14 days" href="/app/reports" />
           <ModuleLinkCard icon={Handshake} title="Off-Page & Outreach" subtitle="Brand mentions, opportunity assessment, personalized outreach, backlink checks" href="/app/outreach" />
           <ModuleLinkCard icon={Megaphone} title="Paid Advertising" subtitle="AI-drafted campaign briefs, your budget, your approval — launch always stays manual" href="/app/paid-campaigns" />
+          <ModuleLinkCard icon={Sparkles} title="AI Assistant" subtitle="Ask about your report, edit or skip a post, draft something new" href="/app/assistant" />
+          <ModuleLinkCard icon={MousePointerClick} title="Conversions" subtitle="Trackable WhatsApp/call/form links plus a real Google Organic → Sales funnel" href="/app/conversions" />
+          <ModuleLinkCard icon={HeartPulse} title="Connection Health" subtitle="One place to see what's connected, not added, or needs reconnecting" href="/app/health" />
           <ComingSoonCard icon={MapPin} title="Local SEO / Google Business Profile" />
         </div>
       </section>

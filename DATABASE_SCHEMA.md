@@ -73,11 +73,29 @@ Unlike every Phase 1–3 connection table (client-managed via `is_org_member`), 
 
 `paid_campaigns.status` is the one place in this schema where a client-set value (`draft`/`pending_approval`/`approved`/`rejected`) and an admin-set value (`launched_externally`/`paused`/`completed`/`cancelled`) share a single column — RLS gives both roles an UPDATE policy, but only the *client's own* server action (`approveCampaignAction`) ever writes `approved`, and only the *admin's* actions ever write the post-launch values (enforced in `app/admin/clients/[orgId]/paid-campaign-actions.ts`'s status allowlist). See `SECURITY_AND_RLS.md`.
 
+## Tables/columns added in Phase 7
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `system_settings` | Single-row platform-wide switch (Emergency Freeze, spec §28) | `id` (boolean PK, `check(id)` — enforces exactly one row), `emergency_freeze`, `frozen_by`/`frozen_at`/`frozen_reason` |
+| `ai_usage_events` | Append-only, real per-call Claude token/cost tracking (spec §30) | `feature` (`content_generation`\|`report_narrative`\|`opportunity_assessment`\|`outreach_draft`\|`campaign_brief`\|`assistant_chat`), `input_tokens`/`output_tokens`, `estimated_cost_usd` — **the one append-only table where the owning org gets no SELECT at all** (see `SECURITY_AND_RLS.md`) |
+| `conversion_links` | Client-created trackable link (spec §22) | `type` (`whatsapp`\|`phone`\|`form`\|`booking`\|`other`), `label`, `destination` |
+| `conversion_events` | Append-only click/lead/sale/booking log | `link_id` (nullable — null means manually logged, not from a tracked link), `event_type`, `value`, `utm_source`/`utm_medium`/`utm_campaign` — `org_id` is derived server-side from `link_id` by a trigger whenever a link is involved, never trusted from a public request |
+
+`client_settings` gained 4 nullable manual-cost columns (`manual_buffer_cost_usd`, `manual_storage_cost_usd`, `manual_other_cost_usd`, `manual_other_cost_label`, spec §30) — no API exists to pull these for real, so they're admin-entered.
+
+`content_versions.generated_by` CHECK extended to add `'gpt_assistant'` (the AI Assistant, spec §17) and `'restored'` (version-restore, spec §24); gained a nullable `restored_from_version int` for the restore breadcrumb.
+
+`organizations` gained `is_sandbox boolean` (spec §31) and its `status` CHECK was extended to add `'offboarded'` (spec §29) — same drop/add-constraint pattern already used for `google_connections.service` in Phase 4.
+
+**Two pre-existing bugs fixed in `0016_phase7_schema.sql`, not new features** (full story in `PROJECT_PLAN.md`'s Phase 7 section): `client_settings.master_stop`'s default flipped from `true` to `false` (it had defaulted to "stopped" since Phase 1, undetected because nothing read it until now) with a backfill update; and the missing `client_settings` owner-UPDATE RLS policy (Phase 2's Autopilot/Approval-Required toggle had been silently failing) is fixed in `0017_phase7_rls.sql`.
+
 ## Triggers / functions
 
 - `handle_new_user()` — inserts a `profiles` row (`role = 'client_owner'`) whenever a new `auth.users` row is created.
 - `handle_org_activation()` — when `organizations.status` transitions to `active`: creates `client_settings` and activates + dates the org's latest `subscriptions` row (start = today, expiry = today + 3/6/12 months by billing term).
 - `is_super_admin()`, `is_org_member(org_id)` — `security definer` helper functions used throughout RLS policies (see `SECURITY_AND_RLS.md`).
+- `set_conversion_event_org_id()` (Phase 7) — `before insert` trigger on `conversion_events` that derives `org_id` from `link_id` whenever a link is involved, so the public/anon click-insert path (`0017_phase7_rls.sql`) never has to trust a request's own claim about which org a click belongs to.
 
 ## Storage buckets
 
@@ -94,4 +112,6 @@ All four use the path convention `{org_id}/{uuid}-{filename}` so a single `stora
 
 Spec §25's `backlink_opportunities` and `outreach_jobs` are **partially** represented: `off_page_opportunities`/`outreach_messages` (Phase 5) cover the human-seeded, AI-assessed pipeline described in `ARCHITECTURE.md`, but not a web-wide automated discovery engine — that needs a backlink index (Ahrefs/Semrush/Moz-class), explicitly deferred (see `PROJECT_PLAN.md`'s Phase 5 section).
 
-Spec §25's `ad_campaigns`/`campaign_approvals` are now **fully** represented as `paid_campaigns`/`paid_campaign_approvals` (Phase 6) — the one gap from this table's original NOT-yet-created list that Phase 6 closes. `automation_jobs`, `api_health_events`, `support_tickets`, `generated_assets` remain not yet created.
+Spec §25's `ad_campaigns`/`campaign_approvals` are now **fully** represented as `paid_campaigns`/`paid_campaign_approvals` (Phase 6) — the one gap from this table's original NOT-yet-created list that Phase 6 closes.
+
+Phase 7 deliberately does **not** create `api_health_events` — the Connection Health Center (spec §27) turned out to need zero new schema at all, since it's pure aggregation over status columns (`org_links.status`, `google_connections.status`, `buffer_channel_links` presence) that already existed; a dedicated events/incident table is still worth adding once there's real connection volume and, ideally, a cron platform to poll it proactively (still gated on the open hosting decision, spec §37.3). `automation_jobs`, `support_tickets`, `generated_assets` remain not yet created — none of Phase 7's 8 sub-features needed them.

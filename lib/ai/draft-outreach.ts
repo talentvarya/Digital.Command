@@ -1,11 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicClient, HAIKU_MODEL, AiGenerationError } from "@/lib/ai/client";
+import type { AiUsage } from "@/lib/ai/log-usage";
 import type { BrandProfile, OffPageOpportunity } from "@/types/database";
 import type { PageContent } from "@/lib/web/fetch-page";
 
 export interface DraftedOutreach {
   subject: string;
   body: string;
+  usage: AiUsage;
 }
 
 const SYSTEM_PROMPT = `You write short, genuinely personalized off-page SEO outreach emails (guest post pitches, broken-link fix suggestions, or asking a site to add a link for an existing unlinked mention) on behalf of a client's business.
@@ -60,6 +62,7 @@ export async function draftOutreachMessage(params: {
     return {
       subject: typeof parsed.subject === "string" ? parsed.subject : "Quick note",
       body: typeof parsed.body === "string" ? parsed.body : textBlock.text,
+      usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens },
     };
   } catch (error) {
     if (error instanceof Anthropic.APIError) {

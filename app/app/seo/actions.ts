@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireOrgMember } from "@/lib/auth/require-org-member";
 import { logAudit } from "@/lib/audit/log";
+import { checkAutomationAllowed } from "@/lib/automation/guard";
 import { runSeoAudit } from "@/lib/seo/audit";
 import { getValidAccessToken } from "@/lib/google/oauth";
 import { fetchSearchConsoleSnapshot } from "@/lib/google/search-console";
@@ -19,6 +20,9 @@ export async function runAuditAction(_prevState: ActionResult, formData: FormDat
   const supabase = createClient();
   const member = await requireOrgMember(supabase);
   if ("error" in member) return member;
+
+  const automation = await checkAutomationAllowed(supabase, member.orgId);
+  if (!automation.allowed) return { error: automation.reason };
 
   let url = (formData.get("url") as string)?.trim();
   if (!url) return { error: "Enter a website URL to audit." };

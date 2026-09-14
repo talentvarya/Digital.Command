@@ -5,7 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { uploadOrgFile } from "@/lib/supabase/upload";
 import { requireOrgMember } from "@/lib/auth/require-org-member";
 import { logAudit } from "@/lib/audit/log";
+import { checkAutomationAllowed, isEmergencyFrozen } from "@/lib/automation/guard";
 import { generateCaption, findAvoidedWords, AiGenerationError } from "@/lib/ai/generate-content";
+import { logAiUsage } from "@/lib/ai/log-usage";
 import { REJECTIONS_BEFORE_SUGGESTION, MONTHLY_AI_GENERATION_SAFETY_CAP } from "@/lib/constants/content";
 import { dispatchToPublisher } from "@/lib/publishing/dispatch";
 import { getBufferPostStatus } from "@/lib/buffer/client";
@@ -48,6 +50,9 @@ export async function generateAiContentAction(
   if ("error" in member) return member;
   const { userId, orgId } = member;
 
+  const automation = await checkAutomationAllowed(supabase, orgId);
+  if (!automation.allowed) return { error: automation.reason };
+
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
@@ -55,7 +60,7 @@ export async function generateAiContentAction(
     .from("content_versions")
     .select("id", { count: "exact", head: true })
     .eq("org_id", orgId)
-    .in("generated_by", ["ai", "client_suggestion"])
+    .in("generated_by", ["ai", "client_suggestion", "gpt_assistant"])
     .gte("created_at", startOfMonth.toISOString());
   if ((generationsThisMonth ?? 0) >= MONTHLY_AI_GENERATION_SAFETY_CAP) {
     return {
@@ -116,6 +121,7 @@ export async function generateAiContentAction(
     if (err instanceof AiGenerationError) return { error: err.message };
     throw err;
   }
+  await logAiUsage(supabase, { orgId, feature: "content_generation", usage: generated.usage });
 
   const avoidedWords = findAvoidedWords(generated.caption, brand?.words_to_avoid ?? []);
   const heldForPolicy = controlMode === "autopilot" && avoidedWords.length > 0;
@@ -315,6 +321,10 @@ export async function createManualContentAction(
   if ("error" in member) return member;
   const { userId, orgId } = member;
 
+  if (await isEmergencyFrozen(supabase)) {
+    return { error: "Uploads are paused platform-wide (Emergency Freeze) — try again once it's lifted." };
+  }
+
   const platform = formData.get("platform") as ContentPlatform;
   const scheduledDate = formData.get("scheduledDate") as string;
   const caption = (formData.get("caption") as string) ?? "";
@@ -389,6 +399,10 @@ export async function addContentMediaAction(_prevState: ActionResult, formData: 
   const supabase = createClient();
   const member = await requireOrgMember(supabase);
   if ("error" in member) return member;
+
+  if (await isEmergencyFrozen(supabase)) {
+    return { error: "Uploads are paused platform-wide (Emergency Freeze) — try again once it's lifted." };
+  }
 
   const contentItemId = formData.get("contentItemId") as string;
   const file = formData.get("media") as File | null;
@@ -570,6 +584,70 @@ export async function checkPublishStatusAction(_prevState: ActionResult, formDat
 // ============================================================================
 // Autopilot / Approval Required mode switch (spec §10)
 // ============================================================================
+// ============================================================================
+// Version restore (spec §24 Backup + Rollback) — content_versions has always
+// been append-only history; this is the first thing that reads it back for
+// display and writes an old version's caption back onto content_items.
+// Restoring inserts a NEW version rather than rewriting history.
+// ============================================================================
+export async function restoreContentVersionAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
+  const supabase = createClient();
+  const member = await requireOrgMember(supabase);
+  if ("error" in member) return member;
+
+  const itemId = formData.get("itemId") as string;
+  const versionNumber = Number(formData.get("versionNumber"));
+
+  const { data: item } = await supabase.from("content_items").select("locked, publish_status").eq("id", itemId).single();
+  if (!item) return { error: "Content item not found." };
+  if (item.locked) return { error: "This item is locked." };
+  if (item.publish_status !== "not_sent") {
+    return { error: "This has already been sent out — restoring an old version here wouldn't change what's actually live." };
+  }
+
+  const { data: version } = await supabase
+    .from("content_versions")
+    .select("caption, hashtags")
+    .eq("content_item_id", itemId)
+    .eq("version_number", versionNumber)
+    .single();
+  if (!version) return { error: "That version could not be found." };
+
+  await supabase
+    .from("content_items")
+    .update({ caption: version.caption, hashtags: version.hashtags, status: "waiting_approval", updated_at: new Date().toISOString() })
+    .eq("id", itemId);
+
+  const { data: versionRows } = await supabase
+    .from("content_versions")
+    .select("version_number")
+    .eq("content_item_id", itemId)
+    .order("version_number", { ascending: false })
+    .limit(1);
+  await supabase.from("content_versions").insert({
+    content_item_id: itemId,
+    org_id: member.orgId,
+    version_number: (versionRows?.[0]?.version_number ?? 0) + 1,
+    caption: version.caption,
+    hashtags: version.hashtags,
+    generated_by: "restored",
+    restored_from_version: versionNumber,
+  });
+
+  await logAudit(supabase, {
+    orgId: member.orgId,
+    actorUserId: member.userId,
+    actorRole: "client_owner",
+    source: "CLIENT_MANUAL",
+    actionType: "content_version_restored",
+    target: itemId,
+    newState: { restoredFromVersion: versionNumber },
+  });
+
+  refresh();
+  return {};
+}
+
 export async function setControlModeAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
   const supabase = createClient();
   const member = await requireOrgMember(supabase);

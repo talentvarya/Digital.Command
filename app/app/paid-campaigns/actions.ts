@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit/log";
 import { getRequestMeta } from "@/lib/utils/request-meta";
 import { prepareCampaignDraft } from "@/lib/ai/prepare-campaign";
 import { AiGenerationError } from "@/lib/ai/client";
+import { logAiUsage } from "@/lib/ai/log-usage";
 import type { ActionResult } from "@/app/register/actions";
 import type { AdPlatform, BrandProfile, BudgetPeriod } from "@/types/database";
 
@@ -65,6 +66,7 @@ export async function prepareCampaignAction(_prevState: ActionResult, formData: 
     if (err instanceof AiGenerationError) return { error: err.message };
     throw err;
   }
+  await logAiUsage(supabase, { orgId, feature: "campaign_brief", usage: draft.usage });
 
   const { data: campaign, error } = await supabase
     .from("paid_campaigns")

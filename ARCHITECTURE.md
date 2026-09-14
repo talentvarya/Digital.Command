@@ -1,11 +1,11 @@
-# Digital Command — Architecture (Phase 1 + 2 + 3 + 4 + 5 + 6)
+# Digital Command — Architecture (Phase 1 + 2 + 3 + 4 + 5 + 6 + 7, final phase)
 
 ## Stack
 
 - **Next.js 14 (App Router) + TypeScript** — server components for data fetching, server actions for all mutations.
 - **Supabase**: Postgres + Auth + Storage, accessed via `@supabase/ssr`. RLS is the authorization layer — the app almost never needs the service-role key (see `SECURITY_AND_RLS.md`).
 - **TailwindCSS** for styling, `lucide-react` for icons, `zod` for input validation at the server-action boundary.
-- **`@anthropic-ai/sdk`** (Phase 2+) — server-only, generates 7-Day Planner captions, report narratives (Phase 3), (Phase 5) off-page opportunity assessments + outreach drafts, and (Phase 6) paid campaign briefs (`claude-haiku-4-5-20251001`). See "AI content generation", "Reporting", "Off-page opportunities", and "Paid campaign preparation" below.
+- **`@anthropic-ai/sdk`** (Phase 2+) — server-only, generates 7-Day Planner captions, report narratives (Phase 3), (Phase 5) off-page opportunity assessments + outreach drafts, (Phase 6) paid campaign briefs, and (Phase 7) the AI Assistant's tool-use conversations (`claude-haiku-4-5-20251001`). Phase 7 is the first use of the stable (non-beta) Messages API's `tools`/`tool_choice` parameters anywhere in this codebase — a hand-rolled loop, not the SDK's beta Tool Runner, to stay consistent with every other `lib/ai/*.ts` file's plain-call style. See "AI content generation", "Reporting", "Off-page opportunities", "Paid campaign preparation", and "AI Assistant" below.
 - **`cheerio`** (Phase 3+) — server-only HTML parsing, shared by the SEO crawl audit and (Phase 5) off-page page-fetching (`lib/web/fetch-page.ts`).
 - **Google OAuth (plain `fetch`, no `googleapis` SDK)** (Phase 3+) — Search Console, Analytics Data API, and (Phase 4) YouTube Data API access. A handful of REST calls didn't justify the heavy official SDK.
 - **Buffer GraphQL API (plain `fetch`)** (Phase 4) — Facebook/Instagram publishing, one shared personal API key (see "Publishing dispatch" below for why this is a different model than every other Phase 1–3 connection).
@@ -31,14 +31,20 @@
 /app/reports               On-demand reports: real metrics + AI-written narrative (spec §21)
 /app/outreach              Off-page opportunities, brand-mention search, AI-drafted outreach, backlink checks (spec §9.2)
 /app/paid-campaigns        Paid campaign drafting, client budget/date authorization, approve/reject (spec §14)
+/app/assistant             In-app AI Assistant — chat, tool-use, always requires the client's own approval after (spec §17)
+/app/conversions           Trackable WhatsApp/call/form/booking links + manual lead/sale/booking log + funnel (spec §22)
+/app/health                Connection Health Center — real-time aggregation of every connection's status (spec §27)
+/admin/costs               Super Admin only — per-client revenue/AI-cost/manual-cost/margin (spec §30)
+/admin/clients/[orgId]/export  Super Admin only — downloads a JSON export of a client's business data (spec §29)
 /api/auth/callback         Exchanges Supabase Auth email-link codes for a session
 /api/google/oauth/start    Begins the Search Console / Analytics / YouTube OAuth flow (sets CSRF state cookie)
 /api/google/oauth/callback Verifies state, exchanges code for tokens, stores the connection
+/api/track/[linkId]        Public, unauthenticated — logs a click, 302s to the client's real destination (spec §22)
 ```
 
-Admin panel: `/admin/clients/[orgId]` gained a "Publishing Channels" section (Phase 4) for linking a client's org+platform to one of VMG's own Buffer channels — see "Publishing dispatch" below — a read-only "Off-Page Activity" opportunity-count summary (Phase 5), and a "Paid Campaigns" section (Phase 6) with the admin's only two write actions: Mark Launched and Update Status/Performance — see "Paid campaign preparation + approval" below.
+Admin panel: `/admin/clients/[orgId]` gained a "Publishing Channels" section (Phase 4) for linking a client's org+platform to one of VMG's own Buffer channels — see "Publishing dispatch" below — a read-only "Off-Page Activity" opportunity-count summary (Phase 5), a "Paid Campaigns" section (Phase 6) with the admin's only two write actions: Mark Launched and Update Status/Performance — see "Paid campaign preparation + approval" below — and (Phase 7) a read-only "Connection Health" section, an Offboarding panel, and a sandbox toggle in the header. `/admin/dashboard` (Phase 7) gained the Emergency Freeze control and an `is_sandbox` badge on each client row.
 
-`middleware.ts` (via `lib/supabase/middleware.ts`) refreshes the Supabase session on every request and enforces route guards: auth required for `/admin`, `/app`, `/pending`, `/register/details`; role check + MFA check for `/admin/*`; org-membership + `status === 'active'` check for `/app/*` (which is why `/app/brand`, `/app/links`, `/app/planner` are unreachable until Super Admin activation — same guard, no extra wiring needed).
+`middleware.ts` (via `lib/supabase/middleware.ts`) refreshes the Supabase session on every request and enforces route guards: auth required for `/admin`, `/app`, `/pending`, `/register/details`; role check + MFA check for `/admin/*`; org-membership + `status === 'active'` check for `/app/*` (which is why `/app/brand`, `/app/links`, `/app/planner` are unreachable until Super Admin activation — same guard, no extra wiring needed). `/admin/clients/[orgId]/export` inherits the same `/admin/*` guard for free by living inside that App Router segment — deliberately not placed under `/api/admin/...`, which wouldn't get the MFA check. `/api/track/[linkId]` (Phase 7) is the one intentionally public, unauthenticated route in this app — it exists specifically to be hit by anonymous visitors on a client's own website; see "Conversion tracking" below for how it stays safe without a session.
 
 ## Data flow for the registration → activation lifecycle
 
@@ -261,6 +267,132 @@ campaign directly in Google Ads/Meta's own dashboard:
     "admin can never authorize spend" on the admin side.
 ```
 
+## Automation guard — Master STOP & Emergency Freeze (Phase 7, spec §28)
+
+`lib/automation/guard.ts` exports two separate functions, not one combined check — a client's own manual upload during their own Master STOP isn't "automation acting for them" and shouldn't be blocked by it, but Emergency Freeze's spec-listed "Uploads" means a platform-wide freeze should block it:
+
+```
+isEmergencyFrozen(supabase) — reads the system_settings singleton row (id=true, enforced by a
+  boolean primary key + check(id) so exactly one row can ever exist)
+
+checkAutomationAllowed(supabase, orgId) — checks isEmergencyFrozen() first, then
+  client_settings.master_stop for that org
+```
+
+Call sites: `checkAutomationAllowed` at the top of `generateAiContentAction`, `runAuditAction`, `addOpportunityAction`, `draftOutreachAction` (each immediately after their existing `requireOrgMember` check), and inside `dispatchToPublisher` itself — one choke point covers all 3 of its callers, leaving `publish_status` untouched on block (same "unconfigured, not an error" convention Phase 4 already established). `isEmergencyFrozen`-only on `createManualContentAction`/`addContentMediaAction` (uploads shouldn't be blocked by a client's own Master STOP). `paid_campaigns` actions are deliberately **not** gated — Phase 6 already has its own complete, separate manual-approval safety boundary; gating it too would be redundant, not more correct.
+
+Both switches were built on top of two pre-existing bugs this phase's own research surfaced and fixed — see `PROJECT_PLAN.md`'s Phase 7 section and `SECURITY_AND_RLS.md` for the full story: `master_stop`'s default was inverted (defaulted to "stopped"), and `client_settings` had no client-writable UPDATE policy at all, so Phase 2's Autopilot/Approval-Required toggle has been silently failing since it was written.
+
+## AI Assistant (Phase 7, spec §17)
+
+The first real use of `audit_logs.source = 'GPT_ASSISTANT'` since the enum was defined in Phase 1.
+
+```
+AssistantChat (components/assistant/AssistantChat.tsx) — "use client", messages kept in local
+  React state only, never persisted server-side. Calls sendAssistantMessageAction directly as a
+  plain async function (not through ActionForm/useFormState) — chat is a growing transcript, not
+  a single-result form, so this is a deliberate deviation from every other action in this app.
+
+sendAssistantMessageAction (app/app/assistant/actions.ts)
+  -> requireOrgMember -> isEmergencyFrozen (whole endpoint gated before Claude is even called)
+  -> gathers context: brand_profiles, client_settings.content_control_mode, next 10 upcoming
+     content_items -> runAssistantChat()
+
+runAssistantChat (lib/ai/assistant-chat.ts) — a hand-rolled tool-use loop (not the SDK's beta
+  Tool Runner): messages.create({tools: ASSISTANT_TOOLS, tool_choice: {type:'auto',
+  disable_parallel_tool_use:true}}) -> if stop_reason==='tool_use', executeAssistantTool() ->
+  append a tool_result message -> loop (capped at 5 rounds — a hand-rolled loop doesn't get the
+  SDK's own runaway protection for free) -> return final text. Every round's token usage is
+  summed and logged once via logAiUsage(feature:'assistant_chat').
+
+executeAssistantTool (lib/ai/assistant-tools.ts) — 6 explicit tools, one per §17 example prompt
+  group, each mapped to existing planner logic:
+    explain_report, explain_seo_trend       — read-only
+    edit_content_caption                    — mirrors editContentAction (also covers "Improve
+                                                YouTube title": dispatchToYoutube already uses
+                                                caption as the video title, no separate column)
+    regenerate_content                      — mirrors generateAiContentAction's regenerate path,
+                                                still runs findAvoidedWords + the monthly cap
+    skip_content_item                       — mirrors decideContentAction('skip')
+    create_draft_content                    — new content_item, source='gpt_assistant_generated'
+                                                (existed since Phase 2, already labeled in
+                                                ContentItemCard — no UI change needed there)
+  Safety rule stricter than §17 strictly requires: every assistant-created/edited content_item
+  always lands at/returns to status='waiting_approval', regardless of the org's Autopilot
+  setting — the assistant can never cause an auto-publish. No tool touches paid_campaigns or
+  security settings, and none operates on more than one row — the same structural-compliance
+  philosophy as Phase 5's no-bulk-outreach design, applied to §17's "must NOT" list.
+```
+
+## Content version history + restore (Phase 7, spec §24 Backup + Rollback)
+
+`content_versions` has been a purely append-only history table since Phase 2 (every AI generation and every client edit inserts a row) but had no browse/restore UI until now — a real, new capability built entirely on existing schema. `restoreContentVersionAction` (`app/app/planner/actions.ts`) checks `locked` (existing convention) and `publish_status === 'not_sent'` (new — neither Buffer nor YouTube has an update-in-place API, so restoring an old version after something's already been sent would make Digital Command's own record silently diverge from what's actually live), writes the old caption/hashtags back onto `content_items`, and inserts a **new** `content_versions` row (`generated_by:'restored', restored_from_version:N`) — restoring is itself a new version, never a rewrite of history. `ContentItemCard.tsx` gained a "History" toggle listing every version with a Restore button on all but the current one.
+
+Actual database/storage backup is deliberately **not** reimplemented in application code — that's Supabase's job, and duplicating it would be worse than what the platform already does. See `supabase/README.md`'s new Backups section for what Free vs Pro actually provides and the `pg_dump`-doesn't-include-file-bytes gotcha the spec is effectively warning about.
+
+## Conversion tracking (Phase 7, spec §22)
+
+```
+conversion_links (client-created: type, label, destination) + conversion_events (append-only:
+  link_id nullable, event_type click|lead|sale|booking, value, utm_source/medium/campaign)
+
+GET /api/track/[linkId] — public, no session (hit by anonymous visitors on the client's own
+  website, wherever they place this URL as their WhatsApp/call/form button href)
+  -> selects only id, org_id, destination (matches the anon column-grant in 0017_phase7_rls.sql)
+  -> inserts a click event with whatever utm_* query params arrived
+  -> 302s to link.destination
+
+createConversionLinkAction / logConversionEventAction (app/app/conversions/actions.ts) — client
+  creates links and manually logs lead/sale/booking events not tied to any link (a sale closed
+  over the phone, say); each manual log gets its own logAudit call (source='CLIENT_MANUAL') —
+  the public click endpoint does not write to audit_logs, since an anonymous visitor isn't one
+  of the 4 defined actor sources.
+```
+
+Two RLS mechanisms new to this codebase, both in `0017_phase7_rls.sql` — see `SECURITY_AND_RLS.md` for the full reasoning: a column-level GRANT restriction on `conversion_links` for the `anon` role (same mechanism already proven for `profiles.role`/`notifications.read`, needed because the anon key is public/embeddable and a plain row policy alone would let anyone dump every client's link metadata in bulk), and a `before insert` trigger on `conversion_events` that derives `org_id` from `link_id` server-side rather than trusting the public request's own claim.
+
+The funnel view (`/app/conversions`) combines this real click/lead/sale/booking data with **already-real Phase 3 data** (Search Console clicks, Analytics sessions) — genuinely realizing the spec's own "Google Organic → Visitors → WhatsApp Clicks → Calls → Forms → Qualified Leads → Sales" example, not a mockup of it.
+
+## Connection Health Center (Phase 7, spec §27)
+
+Pure aggregation, zero new schema. `mapConnectionStatus()` (`lib/constants/health.ts`) maps the already-identical `org_links.status`/`google_connections.status` enum (`connected|not_added|reconnect_required|error`) onto the spec's vocabulary, and `buffer_channel_links` presence/absence (it has no status column of its own — admin-managed, by design since Phase 4) maps to Healthy/Not Added. `components/HealthCenterPanel.tsx` is shared verbatim between `/app/health` (client) and a read-only section on `/admin/clients/[orgId]` (admin) — pure presentation, no auth logic of its own, which is why it lives at the top level of `components/` rather than under `admin/` or `client/`. "Rate Limited" is deliberately never produced — no code path in `lib/buffer/client.ts`/`lib/youtube/client.ts` distinguishes an HTTP 429 from any other error yet, and with no cron/polling in this app there's nowhere to check it proactively anyway (same open hosting decision, spec §37.3) — honestly deferred, not faked.
+
+## Offboarding (Phase 7, spec §29) — revoke + disconnect + export + mark closed, never delete
+
+Explicit, informed user decision: the spec names no retention period for "start retention/deletion process," so building a deletion trigger would mean guessing at one — a real legal-shaped risk, not just a bug.
+
+```
+offboardOrgAction (app/admin/clients/[orgId]/actions.ts, Super Admin only)
+  -> for each google_connections row: revokeGoogleToken() (lib/google/oauth.ts — real POST to
+     Google's https://oauth2.googleapis.com/revoke, verified directly against Google's own docs,
+     not guessed; revokes the refresh_token when one exists, invalidating the whole grant, not
+     just the current access token) -> delete the row
+  -> delete buffer_channel_links rows (stops Digital Command from posting; does NOT remove the
+     channel from VMG's actual Buffer account — no API exists for that, same class of gap as
+     every other Buffer API limitation from Phase 4 — the admin UI says so explicitly)
+  -> bulk-update content_items to status='skipped', scoped to publish_status='not_sent' only —
+     anything already sent to Buffer/YouTube can't be recalled by this app, so changing our own
+     status on it would misrepresent what's actually still going out
+  -> organizations.status = 'offboarded' (new enum value, same drop/add-constraint pattern
+     already used for google_connections.service in Phase 4)
+
+GET /admin/clients/[orgId]/export (Super Admin only, lives inside the /admin segment on purpose
+  — see the route-map note above) — streams a JSON download of the org's business/marketing
+  records (brand profile, content history, reports, SEO/Search-Console/Analytics summaries,
+  off-page/outreach, paid campaigns) — deliberately excludes verification documents and payment
+  screenshots (raw KYC material), not just their file bytes but their rows entirely.
+```
+
+## Client Cost/Profit Dashboard (Phase 7, spec §30, Super Admin only)
+
+The first table in this app an org member is deliberately never granted SELECT on: `ai_usage_events` (append-only — org_id, feature, input_tokens, output_tokens, estimated_cost_usd) would reveal VMG's own cost basis/margin on that client if exposed to them. Retrofitted onto all 6 `lib/ai/*.ts` call sites (the existing 5 plus the new assistant) rather than adding Supabase access inside those files, which have never touched the database and stay pure Claude-call wrappers: each function's return object gained a `usage: {inputTokens, outputTokens}` field read from the Anthropic SDK's own (previously fully-discarded) `response.usage`, and each **server action** call site adds one line — `logAiUsage(supabase, {orgId, feature, usage})` (`lib/ai/log-usage.ts`, mirrors `logAudit`'s swallow-errors shape) — after its existing call.
+
+`lib/constants/ai-pricing.ts` holds Haiku 4.5's real published rate ($1/$5 per MTok input/output, verified directly against claude.com/pricing this session, not guessed — re-check periodically) so `estimated_cost_usd` is a genuine dollar figure, not an arbitrary one. Revenue comes from existing `subscriptions`+`plans` pricing, normalized to a monthly-equivalent (`monthlyEquivalent()`, `lib/constants/plans.ts`) so it's comparable to a rolling AI-cost window. Buffer/storage/other costs have no API to pull from at all (Buffer is a flat VMG subscription, not billed per client; Supabase storage cost needs a separate, unconnected Management API credential) — manually entered nullable columns directly on `client_settings` (already this app's home for miscellaneous per-org operational settings), same "go manual and label it, don't fake it" precedent as Phase 1's payment verification. `lib/constants/currency.ts` holds a fixed, approximate USD→INR rate so the dashboard can show one combined margin figure rather than two costs in currencies nobody can compare to revenue at a glance.
+
+## Sandbox/Test Client (Phase 7, spec §31)
+
+The smallest item, deliberately: `organizations.is_sandbox boolean` plus a badge everywhere that org appears in the admin UI. Not a parallel "test mode" system — spec §31's actual instruction ("test new features on a dedicated test client before production") is an operational discipline this flag makes visible, not something the app enforces structurally.
+
 ## Directory structure
 
 ```
@@ -273,7 +405,10 @@ lib/
   auth/                 getPostLoginRedirect(), requireSuperAdmin(), requireOrgMember()
   ai/                   client.ts (shared Anthropic client/model), generate-content.ts (captions),
                         generate-report.ts (report narratives), assess-opportunity.ts,
-                        draft-outreach.ts (Phase 5), prepare-campaign.ts (Phase 6) — Phase 2/3/5/6
+                        draft-outreach.ts (Phase 5), prepare-campaign.ts (Phase 6),
+                        log-usage.ts, assistant-tools.ts, assistant-chat.ts (Phase 7) — Phase 2/3/5/6/7
+  automation/           guard.ts — Master STOP / Emergency Freeze check, shared across every
+                        automation-capable action and dispatchToPublisher — Phase 7
   google/               oauth.ts (auth URL, token exchange/refresh), search-console.ts, analytics.ts,
                         custom-search.ts (Phase 5, simple API key, no OAuth) — Phase 3+
   youtube/               client.ts — upload/status via YouTube Data API v3 — Phase 4
@@ -283,7 +418,8 @@ lib/
   web/                   fetch-page.ts — shared crawl helper (SEO audit + off-page assessment) — Phase 5
   constants/            Business-type doc requirements, plan pricing, required policy list,
                         platform/link-type labels, revision-flow threshold, Google service labels,
-                        ad-platform/budget-period labels + admin-settable statuses (Phase 6)
+                        ad-platform/budget-period labels + admin-settable statuses (Phase 6),
+                        ai-pricing.ts, currency.ts, conversions.ts, health.ts (Phase 7)
   validation/           zod schemas for registration input
   utils/                Request IP/user-agent extraction for audit logs
 types/database.ts       Hand-written types mirroring the SQL schema (no live project yet to codegen from)

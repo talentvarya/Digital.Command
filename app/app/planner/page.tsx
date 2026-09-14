@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ControlModeBar } from "@/components/planner/ControlModeBar";
 import { DayCard } from "@/components/planner/DayCard";
-import type { ContentMedia } from "@/types/database";
+import type { ContentMedia, ContentVersion } from "@/types/database";
 
 function nextSevenDays(): string[] {
   const days: string[] = [];
@@ -43,15 +43,25 @@ export default async function PlannerPage() {
   ]);
 
   const itemIds = (items ?? []).map((i) => i.id);
-  const { data: media } = itemIds.length
-    ? await supabase.from("content_media").select("*").in("content_item_id", itemIds)
-    : { data: [] as ContentMedia[] };
+  const [{ data: media }, { data: versions }] = itemIds.length
+    ? await Promise.all([
+        supabase.from("content_media").select("*").in("content_item_id", itemIds),
+        supabase.from("content_versions").select("*").in("content_item_id", itemIds).order("version_number", { ascending: false }),
+      ])
+    : [{ data: [] as ContentMedia[] }, { data: [] as ContentVersion[] }];
 
   const mediaByItem = new Map<string, ContentMedia[]>();
   (media ?? []).forEach((m) => {
     const list = mediaByItem.get(m.content_item_id) ?? [];
     list.push(m);
     mediaByItem.set(m.content_item_id, list);
+  });
+
+  const versionsByItem = new Map<string, ContentVersion[]>();
+  (versions ?? []).forEach((v) => {
+    const list = versionsByItem.get(v.content_item_id) ?? [];
+    list.push(v);
+    versionsByItem.set(v.content_item_id, list);
   });
 
   const itemsByDay = new Map<string, typeof items>();
@@ -78,7 +88,7 @@ export default async function PlannerPage() {
 
       <div className="space-y-4">
         {days.map((date) => (
-          <DayCard key={date} date={date} items={itemsByDay.get(date) ?? []} mediaByItem={mediaByItem} />
+          <DayCard key={date} date={date} items={itemsByDay.get(date) ?? []} mediaByItem={mediaByItem} versionsByItem={versionsByItem} />
         ))}
       </div>
     </div>

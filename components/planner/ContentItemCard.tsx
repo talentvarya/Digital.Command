@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, Unlock, Trash2, Copy, CalendarClock, Sparkles, ImagePlus, X } from "lucide-react";
+import { Lock, Unlock, Trash2, Copy, CalendarClock, Sparkles, ImagePlus, X, History } from "lucide-react";
 import { ActionForm } from "@/components/ActionForm";
 import { FormError } from "@/components/FormError";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -17,9 +17,10 @@ import {
   addContentMediaAction,
   removeContentMediaAction,
   checkPublishStatusAction,
+  restoreContentVersionAction,
 } from "@/app/app/planner/actions";
 import { PLATFORM_LABELS, REJECTIONS_BEFORE_SUGGESTION } from "@/lib/constants/content";
-import type { ContentItem, ContentMedia } from "@/types/database";
+import type { ContentItem, ContentMedia, ContentVersion } from "@/types/database";
 
 const SOURCE_LABELS: Record<string, string> = {
   ai_generated: "AI Generated",
@@ -28,12 +29,22 @@ const SOURCE_LABELS: Record<string, string> = {
   gpt_assistant_generated: "GPT/AI Assistant Generated",
 };
 
-export function ContentItemCard({ item, media }: { item: ContentItem; media: ContentMedia[] }) {
+const VERSION_LABELS: Record<string, string> = {
+  ai: "AI generated",
+  client_suggestion: "AI, from your suggestion",
+  client_edit: "You edited",
+  admin: "Admin edited",
+  gpt_assistant: "AI Assistant",
+  restored: "Restored",
+};
+
+export function ContentItemCard({ item, media, versions }: { item: ContentItem; media: ContentMedia[]; versions: ContentVersion[] }) {
   const [editing, setEditing] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
   const [copying, setCopying] = useState(false);
   const [addingMedia, setAddingMedia] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const needsSuggestion = item.rejection_count >= REJECTIONS_BEFORE_SUGGESTION;
   const finalRoundUsed = item.rejection_count > REJECTIONS_BEFORE_SUGGESTION;
@@ -206,6 +217,11 @@ export function ContentItemCard({ item, media }: { item: ContentItem; media: Con
           <button className="btn-secondary px-3 py-1.5 text-xs" onClick={() => setCopying((v) => !v)}>
             <Copy className="mr-1 inline h-3 w-3" /> Copy
           </button>
+          {versions.length > 0 && (
+            <button className="btn-secondary px-3 py-1.5 text-xs" onClick={() => setShowHistory((v) => !v)}>
+              <History className="mr-1 inline h-3 w-3" /> History ({versions.length})
+            </button>
+          )}
 
           <ActionForm action={deleteContentItemAction}>
             {(state) => (
@@ -308,6 +324,38 @@ export function ContentItemCard({ item, media }: { item: ContentItem; media: Con
             </>
           )}
         </ActionForm>
+      )}
+
+      {showHistory && versions.length > 0 && (
+        <div className="mt-3 space-y-2 rounded-lg bg-ink-50 p-3">
+          <p className="text-xs font-medium uppercase text-ink-400">Version history</p>
+          {versions.map((v, i) => (
+            <div key={v.id} className="rounded-lg border border-ink-100 bg-white p-2 text-xs">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="font-medium text-ink-700">
+                  v{v.version_number} · {VERSION_LABELS[v.generated_by] ?? v.generated_by}
+                  {v.restored_from_version !== null && ` (from v${v.restored_from_version})`}
+                </span>
+                <span className="text-ink-400">{new Date(v.created_at).toLocaleString()}</span>
+              </div>
+              <p className="whitespace-pre-line text-ink-600">{v.caption || "(no caption)"}</p>
+              {i > 0 && (
+                <ActionForm action={restoreContentVersionAction} className="mt-1">
+                  {(state) => (
+                    <>
+                      <input type="hidden" name="itemId" value={item.id} />
+                      <input type="hidden" name="versionNumber" value={v.version_number} />
+                      <SubmitButton className="btn-secondary px-2 py-1 text-xs" pendingLabel="Restoring…">
+                        Restore this version
+                      </SubmitButton>
+                      <FormError message={state.error} />
+                    </>
+                  )}
+                </ActionForm>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

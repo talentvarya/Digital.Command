@@ -25,6 +25,16 @@ export const BILLING_TERM_LABELS = {
   yearly: "Yearly",
 } as const;
 
+const BILLING_TERM_MONTHS: Record<string, number> = { quarterly: 3, half_yearly: 6, yearly: 12 };
+
+// Normalizes any billing term to a monthly-equivalent figure so revenue is
+// comparable to a monthly AI-cost window (spec §30's margin calculation).
+export function monthlyEquivalent(price: number | null, billingTerm: string): number {
+  if (price === null) return 0;
+  const months = BILLING_TERM_MONTHS[billingTerm] ?? 1;
+  return price / months;
+}
+
 export function formatInr(amount: number | null): string {
   if (amount === null) return "Custom pricing";
   return new Intl.NumberFormat("en-IN", {

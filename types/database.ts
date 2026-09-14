@@ -13,7 +13,8 @@ export type OrganizationStatus =
   | "active"
   | "paused"
   | "expired"
-  | "rejected";
+  | "rejected"
+  | "offboarded";
 
 export type BillingTerm = "quarterly" | "half_yearly" | "yearly";
 
@@ -43,6 +44,7 @@ export interface Organization {
   business_type: BusinessType;
   status: OrganizationStatus;
   promo_opt_in: boolean;
+  is_sandbox: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -143,6 +145,19 @@ export interface ClientSettings {
   content_control_mode: ContentControlMode;
   approval_then_autopilot: boolean;
   autopilot_since: string | null;
+  manual_buffer_cost_usd: number | null;
+  manual_storage_cost_usd: number | null;
+  manual_other_cost_usd: number | null;
+  manual_other_cost_label: string | null;
+}
+
+export interface SystemSettings {
+  id: true;
+  emergency_freeze: boolean;
+  frozen_by: string | null;
+  frozen_at: string | null;
+  frozen_reason: string | null;
+  updated_at: string;
 }
 
 export interface BrandProfile {
@@ -242,8 +257,9 @@ export interface ContentVersion {
   version_number: number;
   caption: string | null;
   hashtags: string[];
-  generated_by: "ai" | "client_suggestion" | "client_edit" | "admin";
+  generated_by: "ai" | "client_suggestion" | "client_edit" | "admin" | "gpt_assistant" | "restored";
   client_suggestion_text: string | null;
+  restored_from_version: number | null;
   created_at: string;
 }
 
@@ -477,5 +493,49 @@ export interface PaidCampaignApproval {
   start_date: string | null;
   end_date: string | null;
   approved_by: string | null;
+  created_at: string;
+}
+
+export type AiUsageFeature =
+  | "content_generation"
+  | "report_narrative"
+  | "opportunity_assessment"
+  | "outreach_draft"
+  | "campaign_brief"
+  | "assistant_chat";
+
+export interface AiUsageEvent {
+  id: string;
+  org_id: string;
+  feature: AiUsageFeature;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost_usd: number;
+  created_at: string;
+}
+
+export type ConversionLinkType = "whatsapp" | "phone" | "form" | "booking" | "other";
+export type ConversionEventType = "click" | "lead" | "sale" | "booking";
+
+export interface ConversionLink {
+  id: string;
+  org_id: string;
+  type: ConversionLinkType;
+  label: string;
+  destination: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface ConversionEvent {
+  id: string;
+  link_id: string | null;
+  org_id: string;
+  event_type: ConversionEventType;
+  value: number | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  notes: string | null;
   created_at: string;
 }

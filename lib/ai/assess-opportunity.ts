@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicClient, HAIKU_MODEL, AiGenerationError } from "@/lib/ai/client";
+import type { AiUsage } from "@/lib/ai/log-usage";
 import type { BrandProfile } from "@/types/database";
 import type { PageContent } from "@/lib/web/fetch-page";
 
@@ -7,6 +8,7 @@ export interface OpportunityAssessment {
   relevanceScore: number;
   qualityNotes: string;
   spamRisk: "low" | "medium" | "high";
+  usage: AiUsage;
 }
 
 const SYSTEM_PROMPT = `You evaluate a web page as a potential off-page SEO opportunity (guest post, broken-link replacement, or unlinked mention) for a client's business.
@@ -52,6 +54,7 @@ export async function assessOpportunity(params: {
       relevanceScore: Math.max(0, Math.min(100, Math.round(Number(parsed.relevanceScore) || 0))),
       qualityNotes: typeof parsed.qualityNotes === "string" ? parsed.qualityNotes : "No assessment notes returned.",
       spamRisk,
+      usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens },
     };
   } catch (error) {
     if (error instanceof Anthropic.APIError) {

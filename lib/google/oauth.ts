@@ -3,6 +3,7 @@ import type { GoogleService } from "@/types/database";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
+const REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke";
 
 const SCOPES: Record<GoogleService, string> = {
   search_console: "https://www.googleapis.com/auth/webmasters.readonly",
@@ -62,6 +63,24 @@ async function refreshAccessToken(refreshToken: string): Promise<{ access_token:
   });
   if (!res.ok) throw new Error(`Google token refresh failed: ${res.status} ${await res.text()}`);
   return res.json();
+}
+
+// Offboarding (spec §29) — invalidates the whole grant server-side at
+// Google, not just deletes our own row. Revoking the refresh token (when one
+// was stored) invalidates its access token too; falls back to the access
+// token alone if no refresh token exists. Verified directly against
+// Google's own OAuth2 revoke docs, not guessed: POST, form-encoded, 200 on
+// success / 400 on error (an already-invalid token still counts as success
+// for our purposes — there's nothing left to revoke).
+export async function revokeGoogleToken(token: string): Promise<void> {
+  const res = await fetch(REVOKE_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token }),
+  });
+  if (!res.ok && res.status !== 400) {
+    throw new Error(`Google token revoke failed: ${res.status} ${await res.text()}`);
+  }
 }
 
 // Server-only: reads and, if needed, refreshes the stored token. Never call

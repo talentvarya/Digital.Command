@@ -3,6 +3,7 @@ import { createBufferPost } from "@/lib/buffer/client";
 import { uploadYoutubeVideo } from "@/lib/youtube/client";
 import { getValidAccessToken } from "@/lib/google/oauth";
 import { logAudit } from "@/lib/audit/log";
+import { checkAutomationAllowed } from "@/lib/automation/guard";
 import type { ContentItem } from "@/types/database";
 
 const SEVEN_DAYS_SECONDS = 7 * 24 * 60 * 60;
@@ -15,6 +16,9 @@ const SEVEN_DAYS_SECONDS = 7 * 24 * 60 * 60;
 // linked a channel yet), so failures are recorded on the row, not surfaced
 // as an action error.
 export async function dispatchToPublisher(supabase: SupabaseClient, item: ContentItem): Promise<void> {
+  const automation = await checkAutomationAllowed(supabase, item.org_id);
+  if (!automation.allowed) return; // paused — leave publish_status untouched, same as an unconfigured connection
+
   try {
     if (item.platform === "facebook" || item.platform === "instagram") {
       await dispatchToBuffer(supabase, item);

@@ -6,6 +6,7 @@ import { requireOrgMember } from "@/lib/auth/require-org-member";
 import { logAudit } from "@/lib/audit/log";
 import { generateReportNarrative, type ReportMetricsInput } from "@/lib/ai/generate-report";
 import { AiGenerationError } from "@/lib/ai/client";
+import { logAiUsage } from "@/lib/ai/log-usage";
 import type { ActionResult } from "@/app/register/actions";
 
 export async function generateReportAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
@@ -81,6 +82,7 @@ export async function generateReportAction(_prevState: ActionResult, formData: F
     if (err instanceof AiGenerationError) return { error: err.message };
     throw err;
   }
+  await logAiUsage(supabase, { orgId, feature: "report_narrative", usage: narrative.usage });
 
   const { error } = await supabase.from("reports").insert({
     org_id: orgId,

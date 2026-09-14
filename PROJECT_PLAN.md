@@ -11,8 +11,8 @@ Source of truth: `Digital_Command_Claude_Master_Build_Spec.md` (owner-supplied).
 | 3 | SEO audit, Search Console, Analytics, reporting, graphs, keyword/competitor tracking | ✅ Built |
 | 4 | Buffer integration, Facebook/Instagram publishing, YouTube, GBP/Local SEO | ✅ Built — GBP deferred, see below |
 | 5 | Off-page opportunity engine, outreach, digital PR, backlink verification | ✅ Built — backlink-index-class data deferred, see below |
-| **6** | Paid campaign preparation, manual approval, budget/date controls, ad reporting | **This build — live ad-platform launch stays manual by design, see below** |
-| 7 | Client AI Assistant, conversion tracking, cost dashboard, backup/rollback, API health center, emergency freeze, offboarding, sandbox | Not started |
+| 6 | Paid campaign preparation, manual approval, budget/date controls, ad reporting | ✅ Built — live ad-platform launch stays manual by design, see below |
+| **7** | Client AI Assistant, conversion tracking, cost dashboard, backup/rollback, API health center, emergency freeze, offboarding, sandbox | **This build — final phase in the spec, see below** |
 
 ## Phase 1 exit criteria
 
@@ -108,3 +108,31 @@ I researched Buffer's actual current API before building this (training data on 
 - No automatic campaign optimization, bid management, or A/B testing — out of scope for a "prepare + approve + audit" system of record.
 - No scheduled/automatic performance sync — spend/clicks/conversions are manually entered by Super Admin from what they see in the ad platform's own dashboard (same on-demand, no-cron discipline as every sync in this app, and there's no live API connection to sync from yet anyway).
 - No AI cost cap on campaign drafting yet — same open item already flagged for report-narrative generation (Phase 3), publish-dispatch (Phase 4), and opportunity-assessment/outreach-drafting (Phase 5); see `SECURITY_AND_RLS.md`.
+
+## Phase 7 exit criteria — the final phase in the spec
+
+- A client can chat with an in-app AI assistant that can explain their report/SEO trend, edit or regenerate a scheduled post, skip a day, or draft new content — using an explicit, small set of tools that structurally cannot approve paid spend, touch security settings, or do anything bulk. Every mutating tool call is attributed `SOURCE = GPT_ASSISTANT` — the first real use of that audit enum value since it was defined in Phase 1. Anything the assistant changes always still needs the client's own approval, even under Autopilot.
+- A client can create trackable WhatsApp/call/form/booking links, place them on their own website, and see real click/lead/sale/booking counts alongside real Search Console/Analytics numbers in one funnel view — genuinely realizing the spec's own example funnel, not a mockup.
+- A client can browse an already-scheduled post's full edit history and restore any previous version — using the append-only `content_versions` table that's existed since Phase 2 but never had browse/restore UI until now.
+- A client can pause their own account's automation (Master STOP) without losing any data; Super Admin can freeze the entire platform's publishing/uploads/outreach/AI jobs in an emergency while keeping login/reports/audit logs available — both wired to real, previously-dead schema columns/policies (see "Two pre-existing bugs" below).
+- A client and Super Admin can each see one place (`/app/health`, and a read-only section on the admin client page) showing every connection's real status, aggregated from data that already existed.
+- Super Admin can offboard a client — real Google token revocation, real Buffer-link removal, real cancellation of not-yet-sent content, a real data export — without deleting anything, and mark the account closed.
+- Super Admin can see real per-client AI cost (auto-tracked from actual Claude API token usage) alongside revenue and manually-entered Buffer/storage/other costs, with a clear flag on anything at or below breakeven. No client can see this page.
+- Super Admin can mark an org as a sandbox/test account, visible everywhere that org appears in the admin UI.
+- `npm run lint` and `npm run build` stay clean.
+
+## Two pre-existing bugs Phase 7's own work surfaced (fixed as part of this build, not new features)
+
+1. `client_settings.master_stop` has defaulted to `true` since Phase 1's schema — meaning "stopped" — and was never read or written by any code. Wiring Master STOP to actually gate automation without fixing this would have silently stopped every existing and newly-activated client's automation on day one. Fixed: default flipped to `false`, existing rows backfilled, in `0016_phase7_schema.sql`.
+2. `setControlModeAction` (Phase 2's Autopilot/Approval-Required toggle) has been updating `client_settings` under an org-member session since it was written, but the table's only UPDATE policy was Super-Admin-only (`0002_rls.sql`) — meaning **this toggle has been silently updating zero rows for any real client since Phase 2**, undetected because there's been no live Supabase project to test against yet. Fixed with a new org-member UPDATE policy in `0017_phase7_rls.sql`, needed anyway for the new Master STOP toggle.
+
+## Explicit non-goals for Phase 7
+
+- **No real data deletion/purge on offboarding.** The spec names no retention period for §29's "start retention/deletion process," and guessing one would be a real legal-shaped risk, not just a bug — explicit, informed user decision. Offboarding revokes/disconnects/exports/marks-closed for real; nothing is ever deleted.
+- **No live Rate-Limited detection in the Connection Health Center.** `lib/buffer/client.ts`/`lib/youtube/client.ts` don't distinguish an HTTP 429 from any other error yet, and with no cron/polling infrastructure in this app (still blocked on the open hosting decision, spec §37.3) there's nowhere to check it proactively anyway. The other four health states are real, live aggregations of data that already existed — this one is honestly deferred, not faked.
+- No automated backoff/retry-threshold logic for API calls generally — same reasoning as above.
+- No AI cost cap on assistant conversations yet — same open item already flagged for every other AI call site since Phase 3.
+- The assistant is the in-app option from §17's two named choices ("in-app AI assistant OR premium managed AI workspace") — not a new vendor decision, so nothing to ask sign-off for; the "premium" gating mechanism itself (who gets access, at what price) isn't implemented since the spec doesn't define one and no plan field exists to hang it on.
+- USD→INR conversion on the Cost Dashboard uses a fixed, approximate exchange rate constant (`lib/constants/currency.ts`) rather than a live rate — re-check periodically, same discipline as the Haiku pricing constants.
+
+This is the last phase defined in the master build specification (§35). Everything from here is either a deferred item already tracked in this document (competitor tracking, backlink-index data, Google Business Profile, live ad-platform APIs, real KYC, transactional email, unattended cron) or genuinely new scope the owner decides to add.

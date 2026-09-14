@@ -12,6 +12,7 @@
 5. Get a Buffer personal API key for `BUFFER_ACCESS_TOKEN` (Phase 4, powers Facebook/Instagram publishing) — **this is VMG's own Buffer account, not something each client sets up.** See `../.env.example` for exactly why (Buffer's current API doesn't support per-client OAuth) and the steps.
 6. Set up a Google Programmable Search Engine for `GOOGLE_CUSTOM_SEARCH_API_KEY`/`GOOGLE_CUSTOM_SEARCH_ENGINE_ID` (Phase 5, powers `/app/outreach`'s brand-mention search) — see `../.env.example` for the steps. Free tier, no vendor sign-off needed.
 7. Nothing new to set up for Phase 6 — paid campaign drafting reuses the same `ANTHROPIC_API_KEY` from step 3. There is no Google Ads/Meta API credential anywhere in this app; launching a campaign is a manual step VMG staff does directly on the ad platform (see `../PROJECT_PLAN.md`'s Phase 6 section).
+8. Nothing new to set up for Phase 7 either — the AI Assistant and cost-dashboard usage tracking both reuse `ANTHROPIC_API_KEY`; conversion tracking, Master STOP/Emergency Freeze, the Connection Health Center, and offboarding are all pure application logic with no new external credential.
 
 Copy `../.env.example` to `../.env.local` and fill these in.
 
@@ -34,6 +35,8 @@ Copy `../.env.example` to `../.env.local` and fill these in.
 13. `migrations/0013_phase5_rls.sql` — Phase 5 row-level security policies
 14. `migrations/0014_phase6_schema.sql` — paid campaigns + approval records
 15. `migrations/0015_phase6_rls.sql` — Phase 6 row-level security policies
+16. `migrations/0016_phase7_schema.sql` — AI usage tracking, conversion tracking, system settings (Emergency Freeze), offboarded/sandbox markers, two Phase-1/2 bug fixes (see §7 below)
+17. `migrations/0017_phase7_rls.sql` — Phase 7 row-level security policies, including the `client_settings` owner-update fix
 
 (Equivalently, if you use the Supabase CLI: `supabase db push` after linking the project, with these files under `supabase/migrations/`.)
 
@@ -63,6 +66,14 @@ The Search Console (`webmasters.readonly`), Analytics (`analytics.readonly`), an
 3. For each client, add their Facebook Page and/or Instagram account as a **channel** on buffer.com (this step requires the client to authorize via their own Facebook login when you connect it — it happens on Buffer's site, not in Digital Command).
 4. In Digital Command, go to **Admin → Clients → [that client] → Publishing Channels** and link the channel you just added to the right org + platform. Content the client approves (or Autopilot auto-schedules) then publishes through it automatically.
 
+## 7. Backups (spec §24) — what Supabase already gives you vs. what this app adds
+
+Digital Command's own code does not reimplement database or file backup — that's Supabase's job, and duplicating it would be worse than what the platform already does well. What it does add is real, on-demand **content version history + restore** (`/app/planner` → History on any item) — that's genuinely new, built on the append-only `content_versions` table.
+
+For the infrastructure half:
+- **Database backups**: the Free tier keeps backups for a short rolling window; **Point-in-Time Recovery (PITR)** — the ability to restore to any specific moment, not just a daily snapshot — is a **Pro-tier** feature. Upgrade before you're depending on this for real client data.
+- **Storage (file) backups — the specific gotcha the spec is warning about**: a database backup/`pg_dump` captures the `storage.objects` **table rows** (file paths, metadata) — it does **not** include the actual file bytes sitting in a storage bucket. Verification documents, payment screenshots, brand assets, and planner media all live in Storage, not Postgres tables, so they need their own backup path (e.g. periodically syncing the 4 buckets to external object storage) — not yet automated here, since it needs the same recurring-job infrastructure the still-open hosting decision (spec §37.3) blocks everything else on. Until then, treat anything in Storage as only as durable as Supabase's own bucket redundancy.
+
 ## What's NOT included yet
 
 - Real KYC/Aadhaar/PAN verification API — only stores uploaded documents for a human (Super Admin) to review. Wiring a verification provider is an open item in the master spec (§37.1/§37.2).
@@ -72,3 +83,6 @@ The Search Console (`webmasters.readonly`), Analytics (`analytics.readonly`), an
 - Competitor tracking, and the backlink-index-class parts of off-page SEO (web-wide opportunity discovery, competitor backlink analysis, local citations, digital PR) — deferred by explicit choice, asked twice (Phase 3 and Phase 5), rather than starting a new paid SEO-data vendor relationship without sign-off (spec §36). Keyword tracking (Search Console-based) and the human-seeded off-page opportunity pipeline (crawl + AI assessment + outreach + backlink verification) are both real.
 - Google Business Profile — needs a separate, stricter Google access-request approval (a 60+-day-old verified profile, a business website, formal review) that can't even be developed against without approval, unlike Search Console's Test-User workaround. Revisit once you have an eligible profile.
 - Live Google Ads/Meta Marketing API access — paid campaigns are fully prepared, budgeted, and approved in Digital Command (`/app/paid-campaigns`), but actually creating/launching the campaign on the ad platform is a manual step done directly in Google Ads/Meta's own dashboard, then recorded back in Digital Command by a Super Admin. Deliberate, not a gap — see `../PROJECT_PLAN.md`'s Phase 6 section for the access-requirement research behind this decision.
+- Real data deletion/purge on offboarding — `/admin/clients/[orgId]`'s Offboarding action revokes Google tokens for real, disconnects Buffer channel links, cancels not-yet-sent scheduled content, exports the client's data, and marks the org `offboarded`, but never deletes a row. The spec names no retention period, so a deletion trigger isn't something this build could implement without guessing at one — explicit, informed user decision (see `../PROJECT_PLAN.md`'s Phase 7 section).
+- Offboarding's Buffer disconnect only removes Digital Command's own link to the channel — it does not remove the channel from VMG's actual Buffer account (no API exists for that, same class of gap as every other Buffer API limitation documented in Phase 4). The admin UI says so explicitly; still requires a manual step on buffer.com.
+- Real Rate-Limited detection in the Connection Health Center — `lib/buffer/client.ts`/`lib/youtube/client.ts` don't yet distinguish an HTTP 429 from any other error, and with no cron/polling in this app there's nowhere for that state to be checked proactively anyway (same open hosting decision, spec §37.3). The other four health states (Healthy/Not Added/Reconnect Required/Error) are real, live aggregations of existing connection status columns.

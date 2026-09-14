@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireSuperAdmin } from "@/lib/auth/require-super-admin";
 import { logAudit } from "@/lib/audit/log";
+import { revokeGoogleToken } from "@/lib/google/oauth";
 import type { ActionResult } from "@/app/register/actions";
 
 function refresh(orgId: string) {
@@ -146,6 +147,108 @@ export async function activateOrgAction(_prevState: ActionResult, formData: Form
     target: orgId,
     previousState: { status: "pending_approval" },
     newState: { status: "active" },
+  });
+
+  refresh(orgId);
+  return {};
+}
+
+// ============================================================================
+// Offboarding (spec §29) — revoke + disconnect + export + mark closed only,
+// no data deletion. The spec names no retention period, and guessing one
+// would be a real legal-shaped risk, not just a bug — explicit user
+// decision to stop here (see PROJECT_PLAN.md's Phase 7 section).
+// ============================================================================
+export async function offboardOrgAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
+  const orgId = formData.get("orgId") as string;
+  if (formData.get("confirm") !== "true") return { error: "Please confirm before offboarding." };
+
+  const supabase = createClient();
+  const admin = await requireSuperAdmin(supabase);
+  if ("error" in admin) return admin;
+
+  const { data: org } = await supabase.from("organizations").select("status").eq("id", orgId).single();
+  if (!org) return { error: "Client not found." };
+  if (org.status === "offboarded") return { error: "This client has already been offboarded." };
+
+  const { data: connections } = await supabase
+    .from("google_connections")
+    .select("id, access_token, refresh_token")
+    .eq("org_id", orgId);
+  let revokeFailures = 0;
+  for (const conn of connections ?? []) {
+    const token = conn.refresh_token || conn.access_token;
+    if (token) {
+      try {
+        await revokeGoogleToken(token);
+      } catch {
+        revokeFailures++;
+      }
+    }
+    await supabase.from("google_connections").delete().eq("id", conn.id);
+  }
+
+  const { data: bufferLinks } = await supabase.from("buffer_channel_links").select("id").eq("org_id", orgId);
+  if (bufferLinks?.length) {
+    await supabase.from("buffer_channel_links").delete().eq("org_id", orgId);
+  }
+
+  // Only content that was never actually sent can be safely cancelled here —
+  // anything already dispatched to Buffer/YouTube can't be recalled by this
+  // app (neither has an API for that), so changing our own status on it
+  // would misrepresent what's actually still going out.
+  const { data: skippedItems } = await supabase
+    .from("content_items")
+    .update({ status: "skipped", updated_at: new Date().toISOString() })
+    .eq("org_id", orgId)
+    .eq("publish_status", "not_sent")
+    .not("status", "in", "(published,skipped,rejected)")
+    .select("id");
+
+  const { error } = await supabase.from("organizations").update({ status: "offboarded" }).eq("id", orgId);
+  if (error) return { error: error.message };
+
+  await logAudit(supabase, {
+    orgId,
+    actorUserId: admin.id,
+    actorRole: "super_admin",
+    source: "ADMIN",
+    actionType: "org_offboarded",
+    target: orgId,
+    newState: {
+      googleConnectionsRevoked: connections?.length ?? 0,
+      googleRevokeFailures: revokeFailures,
+      bufferLinksRemoved: bufferLinks?.length ?? 0,
+      contentItemsSkipped: skippedItems?.length ?? 0,
+    },
+  });
+
+  refresh(orgId);
+  return {};
+}
+
+// Spec §31 Sandbox/Test Client — a plain visibility marker, not a parallel
+// system. New automation/features should be tried on a marked-sandbox org
+// before real clients (an operational discipline this flag makes visible,
+// not something the app enforces structurally).
+export async function setSandboxAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
+  const orgId = formData.get("orgId") as string;
+  const isSandbox = formData.get("isSandbox") === "true";
+
+  const supabase = createClient();
+  const admin = await requireSuperAdmin(supabase);
+  if ("error" in admin) return admin;
+
+  const { error } = await supabase.from("organizations").update({ is_sandbox: isSandbox }).eq("id", orgId);
+  if (error) return { error: error.message };
+
+  await logAudit(supabase, {
+    orgId,
+    actorUserId: admin.id,
+    actorRole: "super_admin",
+    source: "ADMIN",
+    actionType: isSandbox ? "org_marked_sandbox" : "org_unmarked_sandbox",
+    target: orgId,
   });
 
   refresh(orgId);

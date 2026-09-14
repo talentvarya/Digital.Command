@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicClient, HAIKU_MODEL, AiGenerationError } from "@/lib/ai/client";
+import type { AiUsage } from "@/lib/ai/log-usage";
 import type { BrandProfile, ContentPlatform } from "@/types/database";
 
 export { AiGenerationError } from "@/lib/ai/client";
@@ -14,6 +15,7 @@ export interface GenerateCaptionParams {
 export interface GeneratedCaption {
   caption: string;
   hashtags: string[];
+  usage: AiUsage;
 }
 
 function buildSystemPrompt(brandProfile: BrandProfile | null): string {
@@ -63,7 +65,7 @@ function buildUserPrompt(params: GenerateCaptionParams): string {
   return lines.join("\n");
 }
 
-function parseResponse(text: string): GeneratedCaption {
+function parseResponse(text: string): Omit<GeneratedCaption, "usage"> {
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text);
@@ -95,7 +97,10 @@ export async function generateCaption(params: GenerateCaptionParams): Promise<Ge
       throw new AiGenerationError("The AI response did not contain any text.");
     }
 
-    return parseResponse(textBlock.text);
+    return {
+      ...parseResponse(textBlock.text),
+      usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens },
+    };
   } catch (error) {
     if (error instanceof Anthropic.AuthenticationError) {
       throw new AiGenerationError("AI generation failed: invalid ANTHROPIC_API_KEY.");

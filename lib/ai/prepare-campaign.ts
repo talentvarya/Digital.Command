@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicClient, HAIKU_MODEL, AiGenerationError } from "@/lib/ai/client";
+import type { AiUsage } from "@/lib/ai/log-usage";
 import type { AdPlatform, BrandProfile } from "@/types/database";
 
 export interface CampaignDraft {
@@ -7,6 +8,7 @@ export interface CampaignDraft {
   keywords: string[];
   creativeBrief: string;
   suggestedBudgetNotes: string;
+  usage: AiUsage;
 }
 
 // Deliberately never returns a single "suggested budget" number presented as
@@ -59,6 +61,7 @@ export async function prepareCampaignDraft(params: {
       keywords: Array.isArray(parsed.keywords) ? parsed.keywords.filter((k: unknown) => typeof k === "string") : [],
       creativeBrief: typeof parsed.creativeBrief === "string" ? parsed.creativeBrief : "",
       suggestedBudgetNotes: typeof parsed.suggestedBudgetNotes === "string" ? parsed.suggestedBudgetNotes : "",
+      usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens },
     };
   } catch (error) {
     if (error instanceof Anthropic.APIError) {

@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicClient, HAIKU_MODEL, AiGenerationError } from "@/lib/ai/client";
+import type { AiUsage } from "@/lib/ai/log-usage";
 
 export interface ReportMetricsInput {
   periodStart: string;
@@ -25,6 +26,7 @@ export interface ReportMetricsInput {
 export interface GeneratedReportNarrative {
   summary: string;
   nextPlan: string;
+  usage: AiUsage;
 }
 
 const SYSTEM_PROMPT = `You write short, plain-English client marketing reports for Digital Command, a digital marketing platform.
@@ -91,15 +93,17 @@ export async function generateReportNarrative(input: ReportMetricsInput): Promis
     const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
     if (!textBlock) throw new AiGenerationError("The AI response did not contain any text.");
 
+    const usage: AiUsage = { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens };
     try {
       const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
       const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : textBlock.text);
       return {
         summary: typeof parsed.summary === "string" ? parsed.summary : textBlock.text,
         nextPlan: typeof parsed.nextPlan === "string" ? parsed.nextPlan : "",
+        usage,
       };
     } catch {
-      return { summary: textBlock.text.trim(), nextPlan: "" };
+      return { summary: textBlock.text.trim(), nextPlan: "", usage };
     }
   } catch (error) {
     if (error instanceof Anthropic.AuthenticationError) {

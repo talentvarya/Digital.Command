@@ -7,6 +7,9 @@ import { PaymentReviewForm } from "@/components/admin/PaymentReviewForm";
 import { ActivationPanel } from "@/components/admin/ActivationPanel";
 import { PublishingChannelsPanel } from "@/components/admin/PublishingChannelsPanel";
 import { PaidCampaignsPanel } from "@/components/admin/PaidCampaignsPanel";
+import { OffboardingPanel } from "@/components/admin/OffboardingPanel";
+import { HealthCenterPanel } from "@/components/HealthCenterPanel";
+import { SandboxToggle } from "@/components/admin/SandboxToggle";
 import { BUSINESS_TYPE_LABELS, BUSINESS_TYPE_REQUIREMENTS } from "@/lib/constants/business";
 import { BILLING_TERM_LABELS, formatInr } from "@/lib/constants/plans";
 import { PLATFORM_LABELS } from "@/lib/constants/content";
@@ -89,10 +92,19 @@ export default async function AdminClientDetailPage({ params }: { params: { orgI
     ? await supabase.from("paid_campaign_approvals").select("*").in("campaign_id", campaignIds).order("approval_version", { ascending: false })
     : { data: [] };
 
+  const { count: alreadySentCount } =
+    org.status === "offboarded"
+      ? await supabase.from("content_items").select("id", { count: "exact", head: true }).eq("org_id", org.id).eq("publish_status", "sent")
+      : { count: 0 };
+
+  const { data: orgLinks } = org.status === "active" ? await supabase.from("org_links").select("*").eq("org_id", org.id) : { data: [] };
+  const { data: googleConnections } =
+    org.status === "active" ? await supabase.from("google_connections").select("service, status").eq("org_id", org.id) : { data: [] };
+
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold text-ink-900">{org.legal_name}</h1>
           <StatusBadge status={org.status} />
         </div>
@@ -100,6 +112,9 @@ export default async function AdminClientDetailPage({ params }: { params: { orgI
           {BUSINESS_TYPE_LABELS[org.business_type as BusinessType]} · Registered{" "}
           {new Date(org.created_at).toLocaleDateString()}
         </p>
+        <div className="mt-1">
+          <SandboxToggle orgId={org.id} isSandbox={org.is_sandbox} />
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -306,6 +321,13 @@ export default async function AdminClientDetailPage({ params }: { params: { orgI
 
           {org.status === "active" && (
             <section className="card">
+              <h2 className="mb-3 text-lg font-semibold text-ink-900">Connection Health (read-only)</h2>
+              <HealthCenterPanel links={orgLinks ?? []} googleConnections={googleConnections ?? []} bufferLinked={(bufferChannelLinks ?? []).length > 0} />
+            </section>
+          )}
+
+          {org.status === "active" && (
+            <section className="card">
               <h2 className="mb-3 text-lg font-semibold text-ink-900">Off-Page Activity (read-only)</h2>
               {Object.keys(opportunityCountsByStatus).length === 0 ? (
                 <p className="text-sm text-ink-400">No opportunities added yet.</p>
@@ -326,10 +348,15 @@ export default async function AdminClientDetailPage({ params }: { params: { orgI
             <h2 className="mb-3 text-lg font-semibold text-ink-900">Client Actions</h2>
             {org.status === "rejected" ? (
               <p className="text-sm text-ink-500">This application has been rejected.</p>
-            ) : org.status === "active" ? (
-              <p className="text-sm text-emerald-700">This client is active.</p>
-            ) : (
+            ) : org.status === "draft" || org.status === "pending_approval" ? (
               <ActivationPanel orgId={org.id} canActivate={canActivate} />
+            ) : (
+              <div className="space-y-4">
+                {org.status === "active" && <p className="text-sm text-emerald-700">This client is active.</p>}
+                {org.status === "paused" && <p className="text-sm text-ink-600">This client is paused.</p>}
+                {org.status === "expired" && <p className="text-sm text-ink-600">This client&apos;s subscription has expired.</p>}
+                <OffboardingPanel orgId={org.id} status={org.status} alreadySentCount={alreadySentCount ?? 0} />
+              </div>
             )}
           </section>
         </div>
