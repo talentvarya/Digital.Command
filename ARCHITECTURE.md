@@ -1,11 +1,11 @@
-# Digital Command — Architecture (Phase 1 + 2 + 3 + 4 + 5)
+# Digital Command — Architecture (Phase 1 + 2 + 3 + 4 + 5 + 6)
 
 ## Stack
 
 - **Next.js 14 (App Router) + TypeScript** — server components for data fetching, server actions for all mutations.
 - **Supabase**: Postgres + Auth + Storage, accessed via `@supabase/ssr`. RLS is the authorization layer — the app almost never needs the service-role key (see `SECURITY_AND_RLS.md`).
 - **TailwindCSS** for styling, `lucide-react` for icons, `zod` for input validation at the server-action boundary.
-- **`@anthropic-ai/sdk`** (Phase 2+) — server-only, generates 7-Day Planner captions, report narratives (Phase 3), and (Phase 5) off-page opportunity assessments + outreach drafts (`claude-haiku-4-5-20251001`). See "AI content generation", "Reporting", and "Off-page opportunities" below.
+- **`@anthropic-ai/sdk`** (Phase 2+) — server-only, generates 7-Day Planner captions, report narratives (Phase 3), (Phase 5) off-page opportunity assessments + outreach drafts, and (Phase 6) paid campaign briefs (`claude-haiku-4-5-20251001`). See "AI content generation", "Reporting", "Off-page opportunities", and "Paid campaign preparation" below.
 - **`cheerio`** (Phase 3+) — server-only HTML parsing, shared by the SEO crawl audit and (Phase 5) off-page page-fetching (`lib/web/fetch-page.ts`).
 - **Google OAuth (plain `fetch`, no `googleapis` SDK)** (Phase 3+) — Search Console, Analytics Data API, and (Phase 4) YouTube Data API access. A handful of REST calls didn't justify the heavy official SDK.
 - **Buffer GraphQL API (plain `fetch`)** (Phase 4) — Facebook/Instagram publishing, one shared personal API key (see "Publishing dispatch" below for why this is a different model than every other Phase 1–3 connection).
@@ -30,12 +30,13 @@
 /app/seo                   Technical SEO audit + Search Console/Analytics connections + keyword tracking (spec §9.1)
 /app/reports               On-demand reports: real metrics + AI-written narrative (spec §21)
 /app/outreach              Off-page opportunities, brand-mention search, AI-drafted outreach, backlink checks (spec §9.2)
+/app/paid-campaigns        Paid campaign drafting, client budget/date authorization, approve/reject (spec §14)
 /api/auth/callback         Exchanges Supabase Auth email-link codes for a session
 /api/google/oauth/start    Begins the Search Console / Analytics / YouTube OAuth flow (sets CSRF state cookie)
 /api/google/oauth/callback Verifies state, exchanges code for tokens, stores the connection
 ```
 
-Admin panel: `/admin/clients/[orgId]` gained a "Publishing Channels" section (Phase 4) for linking a client's org+platform to one of VMG's own Buffer channels — see "Publishing dispatch" below — and a read-only "Off-Page Activity" opportunity-count summary (Phase 5).
+Admin panel: `/admin/clients/[orgId]` gained a "Publishing Channels" section (Phase 4) for linking a client's org+platform to one of VMG's own Buffer channels — see "Publishing dispatch" below — a read-only "Off-Page Activity" opportunity-count summary (Phase 5), and a "Paid Campaigns" section (Phase 6) with the admin's only two write actions: Mark Launched and Update Status/Performance — see "Paid campaign preparation + approval" below.
 
 `middleware.ts` (via `lib/supabase/middleware.ts`) refreshes the Supabase session on every request and enforces route guards: auth required for `/admin`, `/app`, `/pending`, `/register/details`; role check + MFA check for `/admin/*`; org-membership + `status === 'active'` check for `/app/*` (which is why `/app/brand`, `/app/links`, `/app/planner` are unreachable until Super Admin activation — same guard, no extra wiring needed).
 
@@ -214,6 +215,52 @@ checkBacklinkAction -> re-fetches the opportunity's own URL, pageLinksToDomain()
 
 **No bulk-send capability exists anywhere in this schema or UI** — every outreach message is drafted and reviewed one opportunity at a time. This isn't a missing feature; it's what keeps Phase 5 structurally compliant with spec §33/§36's "no mass spam, no auto forum/comment spam" rule without relying on a policy nobody enforces.
 
+## Paid campaign preparation + approval (Phase 6)
+
+The highest-stakes phase in the spec — master prompt rule #6 and spec §14/§36 all say, repeatedly, that paid ad spend must never start automatically. Before scoping this I checked both ad platforms' current API access reality: Google Ads API Basic Access can now be approved in hours with brand verification, but Meta's Marketing API needs Business Verification + App Review specifically because Digital Command would manage *other businesses'* ad accounts, not just VMG's own. Asked the user how far to go given that a bug in either integration has a real financial consequence; the answer was to build the full prepare + approve + audit workflow for real, but keep "make it live" a manual, external, human action — mirroring the same pattern Phase 4 used for Buffer channel-connecting (some steps genuinely belong outside this app). **No Google Ads/Meta API calls exist anywhere in this codebase.**
+
+```
+prepareCampaignAction (app/app/paid-campaigns/actions.ts)
+  -> prepareCampaignDraft() (lib/ai/prepare-campaign.ts) — audience/keywords/creative brief,
+     plus suggestedBudgetNotes explicitly prompted to be QUALITATIVE guidance only, never a
+     number presented as authoritative — the one AI output in this app adjacent to real money
+  -> insert paid_campaigns (status='draft')
+
+updateCampaignAction — client edits audience/keywords/creative AND the real authorization
+  fields (max_spend, budget_period, start_date, end_date — always client-set, never AI-set).
+  Editing a campaign that's already 'approved' or 'rejected' resets it to 'pending_approval':
+  an approval is only ever valid for the exact parameters it covered.
+
+submitForApprovalAction: draft -> pending_approval (a deliberate, explicit step — even
+  though the same person usually drafts and approves, formally submitting is what spec
+  §14's approval record is proving happened)
+
+approveCampaignAction — the single most safety-critical action in this app:
+  -> requires status='pending_approval' AND max_spend/budget_period/start_date/end_date
+     already set AND an explicit confirmation checkbox
+  -> insert paid_campaign_approvals (decision='approved', approval_version, a full snapshot
+     of the budget/dates being authorized, approved_by, ip_address, user_agent — spec §14's
+     exact field list)
+  -> update paid_campaigns.status = 'approved'
+  Only an org member can call this — paid_campaigns_update_admin (RLS) has no path to
+  'approved', and this action is the only code path that ever writes that status. See
+  SECURITY_AND_RLS.md.
+
+rejectCampaignAction — same shape, decision='rejected', reason required.
+
+Super Admin (app/admin/clients/[orgId]/paid-campaign-actions.ts) — after launching the
+campaign directly in Google Ads/Meta's own dashboard:
+  markCampaignLaunchedAction: requires status='approved' -> status='launched_externally'
+    + external_campaign_id (what VMG created on the ad platform) + launched_by/launched_at
+  updateCampaignPerformanceAction: manually-entered platform status/spend/clicks/conversions
+    from what VMG sees in the ad platform's own dashboard (no live API pull exists yet) ->
+    status can only move within {launched_externally, paused, completed, cancelled}
+    (ADMIN_SETTABLE_STATUSES, lib/constants/paid-campaigns.ts) — enforced in the action
+    itself, since RLS's admin UPDATE policy is broad and doesn't structurally stop an admin
+    from writing 'approved'. This allowlist check is the actual enforcement point for
+    "admin can never authorize spend" on the admin side.
+```
+
 ## Directory structure
 
 ```
@@ -226,7 +273,7 @@ lib/
   auth/                 getPostLoginRedirect(), requireSuperAdmin(), requireOrgMember()
   ai/                   client.ts (shared Anthropic client/model), generate-content.ts (captions),
                         generate-report.ts (report narratives), assess-opportunity.ts,
-                        draft-outreach.ts (Phase 5) — Phase 2/3/5
+                        draft-outreach.ts (Phase 5), prepare-campaign.ts (Phase 6) — Phase 2/3/5/6
   google/               oauth.ts (auth URL, token exchange/refresh), search-console.ts, analytics.ts,
                         custom-search.ts (Phase 5, simple API key, no OAuth) — Phase 3+
   youtube/               client.ts — upload/status via YouTube Data API v3 — Phase 4
@@ -235,7 +282,8 @@ lib/
   seo/                  audit.ts — the crawl-based technical SEO checker — Phase 3
   web/                   fetch-page.ts — shared crawl helper (SEO audit + off-page assessment) — Phase 5
   constants/            Business-type doc requirements, plan pricing, required policy list,
-                        platform/link-type labels, revision-flow threshold, Google service labels
+                        platform/link-type labels, revision-flow threshold, Google service labels,
+                        ad-platform/budget-period labels + admin-settable statuses (Phase 6)
   validation/           zod schemas for registration input
   utils/                Request IP/user-agent extraction for audit logs
 types/database.ts       Hand-written types mirroring the SQL schema (no live project yet to codegen from)

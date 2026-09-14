@@ -6,6 +6,7 @@ import { VerificationReviewForm } from "@/components/admin/VerificationReviewFor
 import { PaymentReviewForm } from "@/components/admin/PaymentReviewForm";
 import { ActivationPanel } from "@/components/admin/ActivationPanel";
 import { PublishingChannelsPanel } from "@/components/admin/PublishingChannelsPanel";
+import { PaidCampaignsPanel } from "@/components/admin/PaidCampaignsPanel";
 import { BUSINESS_TYPE_LABELS, BUSINESS_TYPE_REQUIREMENTS } from "@/lib/constants/business";
 import { BILLING_TERM_LABELS, formatInr } from "@/lib/constants/plans";
 import { PLATFORM_LABELS } from "@/lib/constants/content";
@@ -79,6 +80,14 @@ export default async function AdminClientDetailPage({ params }: { params: { orgI
     acc[o.status] = (acc[o.status] ?? 0) + 1;
     return acc;
   }, {});
+
+  const { data: paidCampaigns } = org.status === "active"
+    ? await supabase.from("paid_campaigns").select("*").eq("org_id", org.id).order("created_at", { ascending: false })
+    : { data: [] };
+  const campaignIds = (paidCampaigns ?? []).map((c) => c.id);
+  const { data: campaignApprovals } = campaignIds.length
+    ? await supabase.from("paid_campaign_approvals").select("*").in("campaign_id", campaignIds).order("approval_version", { ascending: false })
+    : { data: [] };
 
   return (
     <div className="space-y-6">
@@ -212,6 +221,18 @@ export default async function AdminClientDetailPage({ params }: { params: { orgI
                   </div>
                 ))}
               </div>
+            </section>
+          )}
+
+          {org.status === "active" && (
+            <section className="card">
+              <h2 className="mb-3 text-lg font-semibold text-ink-900">Paid Campaigns</h2>
+              <p className="mb-3 text-xs text-ink-400">
+                The client prepares and approves these themselves. Once a campaign is approved here as{" "}
+                <em>approved</em>, launch it manually in Google Ads/Meta&apos;s own dashboard, then record it below —
+                Digital Command never spends automatically.
+              </p>
+              <PaidCampaignsPanel orgId={org.id} campaigns={paidCampaigns ?? []} approvals={campaignApprovals ?? []} />
             </section>
           )}
 

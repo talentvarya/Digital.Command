@@ -10,8 +10,8 @@ Source of truth: `Digital_Command_Claude_Master_Build_Spec.md` (owner-supplied).
 | 2 | Client dashboard, Brand Brain, website/link setup, 7-day planner, Autopilot/Approval Required, content versions, notifications | ✅ Built |
 | 3 | SEO audit, Search Console, Analytics, reporting, graphs, keyword/competitor tracking | ✅ Built |
 | 4 | Buffer integration, Facebook/Instagram publishing, YouTube, GBP/Local SEO | ✅ Built — GBP deferred, see below |
-| **5** | Off-page opportunity engine, outreach, digital PR, backlink verification | **This build — backlink-index-class data deferred, see below** |
-| 6 | Paid campaign preparation, manual approval, budget/date controls, ad reporting | Not started |
+| 5 | Off-page opportunity engine, outreach, digital PR, backlink verification | ✅ Built — backlink-index-class data deferred, see below |
+| **6** | Paid campaign preparation, manual approval, budget/date controls, ad reporting | **This build — live ad-platform launch stays manual by design, see below** |
 | 7 | Client AI Assistant, conversion tracking, cost dashboard, backup/rollback, API health center, emergency freeze, offboarding, sandbox | Not started |
 
 ## Phase 1 exit criteria
@@ -92,3 +92,19 @@ I researched Buffer's actual current API before building this (training data on 
 - **Backlink-index-class data is not wired up**: competitor backlink analysis, web-wide backlink opportunity discovery, lost-backlink monitoring beyond opportunities this app already knows about, local citation checks, and digital PR opportunity discovery all fundamentally need a paid Ahrefs/Semrush/Moz-class index. Asked the user again specifically for this phase (backlink data isn't the same as Phase 3's keyword-tracking question) — same answer: defer rather than start a new paid vendor relationship without explicit sign-off (spec §36).
 - No automated email sending — outreach is drafted and tracked in Digital Command, but sending happens through the user's own email client (a `mailto:` link, pre-filled). Deliberate, not a gap: there's still no transactional email provider decision made (open since Phase 1, spec §37.4), and personalized 1:1 outreach genuinely performs better from a real inbox than a bulk sender anyway.
 - "Opportunity discovery" here means *assessing a URL a human found*, not an automated web-wide crawler hunting for candidates — that discovery engine is exactly the backlink-index-shaped need that's deferred above.
+
+## Phase 6 exit criteria
+
+- A client can draft a paid campaign (platform, objective, goal) and get a real AI-drafted audience/keywords/creative brief plus qualitative (never authoritative) budget guidance.
+- The client — never AI, never Super Admin — sets the real, binding maximum spend, budget period, and start/end dates, and must explicitly submit for approval, then tick a confirmation checkbox stating what's being authorized before a campaign can become `approved`. This is enforced at the RLS layer, not just in the UI (see `SECURITY_AND_RLS.md`).
+- Every approval/rejection decision is recorded as its own immutable row (`paid_campaign_approvals`) with an incrementing `approval_version`, the exact budget/dates it covered, who decided, and their IP/user-agent — editing an approved or rejected campaign automatically resubmits it for a fresh decision, so an approval is only ever valid for what it actually covered.
+- Super Admin can mark an `approved` campaign `launched_externally` (recording the real ad platform's campaign ID) only after the client has approved it, and can update platform status/spend/clicks/conversions from what they see in the ad platform's own dashboard — but can never set a campaign to `draft`/`pending_approval`/`approved`/`rejected` themselves, preserving the client-approves-spend rule even against a well-meaning admin mistake.
+- **At no point does Digital Command's own code call a live Google Ads or Meta Marketing API, or spend any money.** "Launch" is always a manual, external, human action performed directly on the ad platform.
+- `npm run lint` and `npm run build` stay clean.
+
+## Explicit non-goals for Phase 6
+
+- **No live Google Ads/Meta Marketing API integration.** Researched both platforms' current access requirements before scoping this phase: Google Ads API Basic Access can now be approved in hours with brand verification, but Meta's Marketing API requires Business Verification + App Review specifically because Digital Command would be managing *other businesses'* ad accounts, not just VMG's own — neither is instant, and a bug in either integration has a real financial consequence, not just a UX one. Asked the user how far to go given that; the answer was to build the full prepare + approve + audit workflow for real, but keep the actual "make it live" step a manual handoff to VMG staff working directly in each platform's own dashboard. Revisit if/when the user wants to pursue real ad-platform API access.
+- No automatic campaign optimization, bid management, or A/B testing — out of scope for a "prepare + approve + audit" system of record.
+- No scheduled/automatic performance sync — spend/clicks/conversions are manually entered by Super Admin from what they see in the ad platform's own dashboard (same on-demand, no-cron discipline as every sync in this app, and there's no live API connection to sync from yet anyway).
+- No AI cost cap on campaign drafting yet — same open item already flagged for report-narrative generation (Phase 3), publish-dispatch (Phase 4), and opportunity-assessment/outreach-drafting (Phase 5); see `SECURITY_AND_RLS.md`.

@@ -28,6 +28,8 @@ const STATUS_STYLES: Record<string, string> = {
   declined: "bg-slate-200 text-slate-800",
   lost: "bg-red-100 text-red-800",
   sent: "bg-emerald-100 text-emerald-800",
+  launched_externally: "bg-brand-100 text-brand-700",
+  completed: "bg-emerald-100 text-emerald-800",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -40,6 +42,7 @@ const STATUS_LABELS: Record<string, string> = {
   reconnect_required: "Reconnect Required",
   awaiting_response: "Awaiting Response",
   link_acquired: "Link Acquired",
+  launched_externally: "Launched",
 };
 
 export function StatusBadge({ status }: { status: string }) {

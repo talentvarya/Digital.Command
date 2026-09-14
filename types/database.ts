@@ -425,3 +425,57 @@ export interface BrandMentionSearch {
   searched_at: string;
   results: BrandMentionResult[];
 }
+
+export type AdPlatform = "google_ads" | "meta_facebook" | "meta_instagram" | "youtube_ads" | "other";
+export type BudgetPeriod = "daily" | "total_campaign";
+export type PaidCampaignStatus =
+  | "draft"
+  | "pending_approval"
+  | "approved"
+  | "rejected"
+  | "launched_externally"
+  | "paused"
+  | "completed"
+  | "cancelled";
+
+export interface PaidCampaign {
+  id: string;
+  org_id: string;
+  platform: AdPlatform;
+  name: string;
+  objective: string | null;
+  audience_description: string | null;
+  keywords: string[];
+  creative_brief: string | null;
+  suggested_budget: number | null;
+  suggested_budget_notes: string | null;
+  max_spend: number | null;
+  budget_period: BudgetPeriod | null;
+  start_date: string | null;
+  end_date: string | null;
+  status: PaidCampaignStatus;
+  external_campaign_id: string | null;
+  external_platform_status: string | null;
+  spend_to_date: number | null;
+  clicks: number | null;
+  conversions: number | null;
+  performance_updated_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaidCampaignApproval {
+  id: string;
+  campaign_id: string;
+  org_id: string;
+  decision: "approved" | "rejected";
+  reason: string | null;
+  approval_version: number;
+  max_spend: number | null;
+  budget_period: BudgetPeriod | null;
+  start_date: string | null;
+  end_date: string | null;
+  approved_by: string | null;
+  created_at: string;
+}

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Search, Link2, MapPin, FileBarChart, Palette, ClipboardList, Handshake } from "lucide-react";
+import { Search, Link2, MapPin, FileBarChart, Palette, ClipboardList, Handshake, Megaphone } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ComingSoonCard } from "@/components/client/ComingSoonCard";
@@ -91,6 +91,7 @@ export default async function ClientDashboardPage() {
           <ModuleLinkCard icon={Search} title="SEO" subtitle="Technical audit, Search Console & Analytics & YouTube connections, keyword tracking" href="/app/seo" />
           <ModuleLinkCard icon={FileBarChart} title="Reports" subtitle="Real data, AI-written summary — every 7 or 14 days" href="/app/reports" />
           <ModuleLinkCard icon={Handshake} title="Off-Page & Outreach" subtitle="Brand mentions, opportunity assessment, personalized outreach, backlink checks" href="/app/outreach" />
+          <ModuleLinkCard icon={Megaphone} title="Paid Advertising" subtitle="AI-drafted campaign briefs, your budget, your approval — launch always stays manual" href="/app/paid-campaigns" />
           <ComingSoonCard icon={MapPin} title="Local SEO / Google Business Profile" />
         </div>
       </section>

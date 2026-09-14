@@ -64,6 +64,15 @@ Unlike every Phase 1–3 connection table (client-managed via `is_org_member`), 
 
 `off_page_opportunities` and `outreach_messages` are client-managed (full CRUD via `is_org_member`) — this is the client's own business-development work, same ownership model as `brand_profiles`/`content_items`, unlike Phase 4's admin-managed `buffer_channel_links`. `brand_mention_searches` is append-only (insert/select only), same convention as every other `*_snapshots` table.
 
+## Tables created in Phase 6
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `paid_campaigns` | Paid ad campaign preparation + lifecycle (spec §14) | `platform` (`google_ads`\|`meta_facebook`\|`meta_instagram`\|`youtube_ads`\|`other`), `audience_description`/`keywords`/`creative_brief` (AI-drafted, client-editable), `suggested_budget_notes` (AI, qualitative-only, never authoritative), `max_spend`/`budget_period`/`start_date`/`end_date` (client-set — the actual spend authorization), `status` (`draft`→`pending_approval`→`approved`\|`rejected`→`launched_externally`→`paused`\|`completed`\|`cancelled`), `external_campaign_id`/`external_platform_status`/`spend_to_date`/`clicks`/`conversions` (admin-entered, post-launch only), `launched_by`/`launched_at`, `performance_updated_by`/`performance_updated_at` |
+| `paid_campaign_approvals` | Append-only — one row per approval/rejection **decision**, not per campaign (spec §14's explicit field list) | `campaign_id`, `decision` (`approved`\|`rejected`), `reason` (rejection), `approval_version` (increments per campaign), a snapshot of `max_spend`/`budget_period`/`start_date`/`end_date` as approved (immutable proof even if the campaign row changes later), `approved_by`, `ip_address`, `user_agent` |
+
+`paid_campaigns.status` is the one place in this schema where a client-set value (`draft`/`pending_approval`/`approved`/`rejected`) and an admin-set value (`launched_externally`/`paused`/`completed`/`cancelled`) share a single column — RLS gives both roles an UPDATE policy, but only the *client's own* server action (`approveCampaignAction`) ever writes `approved`, and only the *admin's* actions ever write the post-launch values (enforced in `app/admin/clients/[orgId]/paid-campaign-actions.ts`'s status allowlist). See `SECURITY_AND_RLS.md`.
+
 ## Triggers / functions
 
 - `handle_new_user()` — inserts a `profiles` row (`role = 'client_owner'`) whenever a new `auth.users` row is created.
@@ -84,3 +93,5 @@ All four use the path convention `{org_id}/{uuid}-{filename}` so a single `stora
 `websites`, `social_connections` (spec's generic name for publishing connections — turned out to need two differently-shaped real tables, `google_connections` and `buffer_channel_links`, rather than one), `content_approvals` (folded into `content_items.status` + `content_versions` history rather than a separate table), `automation_jobs`, `seo_metrics`/`keyword_metrics` (folded into `seo_audits`/`search_console_snapshots` rather than finer-grained per-day tables — revisit if trend reporting needs daily granularity), `report_metrics` (folded into `reports.metrics_snapshot` jsonb), `api_health_events`, `support_tickets`, `generated_assets` — these belong to Phase 6+ and are deliberately absent so the schema doesn't imply functionality that doesn't exist yet.
 
 Spec §25's `backlink_opportunities` and `outreach_jobs` are **partially** represented: `off_page_opportunities`/`outreach_messages` (Phase 5) cover the human-seeded, AI-assessed pipeline described in `ARCHITECTURE.md`, but not a web-wide automated discovery engine — that needs a backlink index (Ahrefs/Semrush/Moz-class), explicitly deferred (see `PROJECT_PLAN.md`'s Phase 5 section).
+
+Spec §25's `ad_campaigns`/`campaign_approvals` are now **fully** represented as `paid_campaigns`/`paid_campaign_approvals` (Phase 6) — the one gap from this table's original NOT-yet-created list that Phase 6 closes. `automation_jobs`, `api_health_events`, `support_tickets`, `generated_assets` remain not yet created.
