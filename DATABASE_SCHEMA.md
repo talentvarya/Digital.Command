@@ -6,6 +6,8 @@ Full SQL lives in `supabase/migrations/`. This is the human-readable map.
 
 `0019_ai_provider_tracking.sql` (post-Phase 7) adds `ai_usage_events.provider` (`anthropic`\|`kimi`, default `anthropic`) so per-call cost tracking stays accurate once Kimi is a second, switchable AI provider alongside Claude — see `ARCHITECTURE.md`'s "AI Provider Abstraction" section.
 
+`0020_ai_provider_gemini_openai.sql` (post-Phase 7) widens that same `provider` column's `CHECK` constraint to also accept `gemini` and `openai`, added as two more switchable providers in the same sitting.
+
 ## Tables created in Phase 1
 
 | Table | Purpose | Key columns |
@@ -82,7 +84,7 @@ Unlike every Phase 1–3 connection table (client-managed via `is_org_member`), 
 | Table | Purpose | Key columns |
 |---|---|---|
 | `system_settings` | Single-row platform-wide switch (Emergency Freeze, spec §28) | `id` (boolean PK, `check(id)` — enforces exactly one row), `emergency_freeze`, `frozen_by`/`frozen_at`/`frozen_reason` |
-| `ai_usage_events` | Append-only, real per-call AI token/cost tracking (spec §30) | `feature` (`content_generation`\|`report_narrative`\|`opportunity_assessment`\|`outreach_draft`\|`campaign_brief`\|`assistant_chat`), `provider` (`anthropic`\|`kimi`, default `anthropic` — added `0019_ai_provider_tracking.sql`), `input_tokens`/`output_tokens`, `estimated_cost_usd` — **the one append-only table where the owning org gets no SELECT at all** (see `SECURITY_AND_RLS.md`) |
+| `ai_usage_events` | Append-only, real per-call AI token/cost tracking (spec §30) | `feature` (`content_generation`\|`report_narrative`\|`opportunity_assessment`\|`outreach_draft`\|`campaign_brief`\|`assistant_chat`), `provider` (`anthropic`\|`kimi`\|`gemini`\|`openai`, default `anthropic` — `0019`/`0020`), `input_tokens`/`output_tokens`, `estimated_cost_usd` — **the one append-only table where the owning org gets no SELECT at all** (see `SECURITY_AND_RLS.md`) |
 | `conversion_links` | Client-created trackable link (spec §22) | `type` (`whatsapp`\|`phone`\|`form`\|`booking`\|`other`), `label`, `destination` |
 | `conversion_events` | Append-only click/lead/sale/booking log | `link_id` (nullable — null means manually logged, not from a tracked link), `event_type`, `value`, `utm_source`/`utm_medium`/`utm_campaign` — `org_id` is derived server-side from `link_id` by a trigger whenever a link is involved, never trusted from a public request |
 

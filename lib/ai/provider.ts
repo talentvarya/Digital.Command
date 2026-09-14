@@ -1,5 +1,7 @@
 import { generateWithAnthropic } from "@/lib/ai/providers/anthropic";
 import { generateWithKimi } from "@/lib/ai/providers/kimi";
+import { generateWithGemini } from "@/lib/ai/providers/gemini";
+import { generateWithOpenai } from "@/lib/ai/providers/openai";
 import type { AiUsage } from "@/lib/ai/log-usage";
 import type { AiProvider } from "@/types/database";
 
@@ -14,17 +16,27 @@ export interface GenerateTextResult {
   usage: { inputTokens: number; outputTokens: number };
 }
 
+const KNOWN_PROVIDERS: AiProvider[] = ["anthropic", "kimi", "gemini", "openai"];
+
 function resolveProvider(requested?: AiProvider): AiProvider {
-  if (requested === "kimi" || requested === "anthropic") return requested;
-  return process.env.AI_PROVIDER === "kimi" ? "kimi" : "anthropic";
+  if (requested && KNOWN_PROVIDERS.includes(requested)) return requested;
+  const envProvider = process.env.AI_PROVIDER as AiProvider | undefined;
+  return envProvider && KNOWN_PROVIDERS.includes(envProvider) ? envProvider : "anthropic";
 }
 
-// The one place every generation call goes through instead of touching the
-// Anthropic SDK (or Kimi's fetch client) directly — reads AI_PROVIDER
-// (default "anthropic", zero config required) unless a caller explicitly
-// pins a provider via opts (see assistant-tools.ts's regenerate_content,
-// which always pins "anthropic" regardless of AI_PROVIDER — the AI
-// Assistant's tool-calling shape isn't portable to Kimi, see
+const GENERATORS: Record<AiProvider, (params: GenerateTextParams) => Promise<GenerateTextResult>> = {
+  anthropic: generateWithAnthropic,
+  kimi: generateWithKimi,
+  gemini: generateWithGemini,
+  openai: generateWithOpenai,
+};
+
+// The one place every generation call goes through instead of touching any
+// provider's SDK/fetch client directly — reads AI_PROVIDER (default
+// "anthropic", zero config required) unless a caller explicitly pins a
+// provider via opts (see assistant-tools.ts's regenerate_content, which
+// always pins "anthropic" regardless of AI_PROVIDER — the AI Assistant's
+// tool-calling shape isn't portable to any of the other three, see
 // ARCHITECTURE.md). This is the one place that stamps `provider` onto the
 // returned usage, so every caller's existing `usage: result.usage` passthrough
 // to logAiUsage() already carries it correctly.
@@ -33,7 +45,7 @@ export async function generateText(
   opts?: { provider?: AiProvider }
 ): Promise<GenerateTextResult & { usage: AiUsage }> {
   const provider = resolveProvider(opts?.provider);
-  const result = provider === "kimi" ? await generateWithKimi(params) : await generateWithAnthropic(params);
+  const result = await GENERATORS[provider](params);
 
   return {
     text: result.text,

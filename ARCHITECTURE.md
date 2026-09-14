@@ -6,7 +6,7 @@
 - **Supabase**: Postgres + Auth + Storage, accessed via `@supabase/ssr`. RLS is the authorization layer — the app almost never needs the service-role key (see `SECURITY_AND_RLS.md`).
 - **TailwindCSS** for styling, `lucide-react` for icons, `zod` for input validation at the server-action boundary.
 - **`@anthropic-ai/sdk`** (Phase 2+) — server-only, generates 7-Day Planner captions, report narratives (Phase 3), (Phase 5) off-page opportunity assessments + outreach drafts, (Phase 6) paid campaign briefs, and (Phase 7) the AI Assistant's tool-use conversations (`claude-haiku-4-5-20251001`). Phase 7 is the first use of the stable (non-beta) Messages API's `tools`/`tool_choice` parameters anywhere in this codebase — a hand-rolled loop, not the SDK's beta Tool Runner, to stay consistent with every other `lib/ai/*.ts` file's plain-call style. See "AI content generation", "Reporting", "Off-page opportunities", "Paid campaign preparation", and "AI Assistant" below.
-- **Kimi/Moonshot AI (plain `fetch`)** (post-Phase 7) — a second, switchable text-generation provider alongside Claude, added at the user's request once they had a real Moonshot API key. Model `kimi-k2.6` (Kimi's small/cheap tier — mirrors Haiku's role). See "AI Provider Abstraction" below.
+- **Kimi/Moonshot AI, Google Gemini, OpenAI (all plain `fetch`)** (post-Phase 7) — three more switchable text-generation providers alongside Claude, added at the user's request. Models: `kimi-k2.6`, `gemini-3.5-flash-lite`, `gpt-5.6-luna` — each provider's own current small/cheap tier, mirroring Haiku's role. See "AI Provider Abstraction" below.
 - **`cheerio`** (Phase 3+) — server-only HTML parsing, shared by the SEO crawl audit and (Phase 5) off-page page-fetching (`lib/web/fetch-page.ts`).
 - **Google OAuth (plain `fetch`, no `googleapis` SDK)** (Phase 3+) — Search Console, Analytics Data API, and (Phase 4) YouTube Data API access. A handful of REST calls didn't justify the heavy official SDK.
 - **Buffer GraphQL API (plain `fetch`)** (Phase 4) — Facebook/Instagram publishing, one shared personal API key (see "Publishing dispatch" below for why this is a different model than every other Phase 1–3 connection).
@@ -390,28 +390,37 @@ The first table in this app an org member is deliberately never granted SELECT o
 
 `lib/constants/ai-pricing.ts` holds Haiku 4.5's real published rate ($1/$5 per MTok input/output, verified directly against claude.com/pricing this session, not guessed — re-check periodically) so `estimated_cost_usd` is a genuine dollar figure, not an arbitrary one. Revenue comes from existing `subscriptions`+`plans` pricing, normalized to a monthly-equivalent (`monthlyEquivalent()`, `lib/constants/plans.ts`) so it's comparable to a rolling AI-cost window. Buffer/storage/other costs have no API to pull from at all (Buffer is a flat VMG subscription, not billed per client; Supabase storage cost needs a separate, unconnected Management API credential) — manually entered nullable columns directly on `client_settings` (already this app's home for miscellaneous per-org operational settings), same "go manual and label it, don't fake it" precedent as Phase 1's payment verification. `lib/constants/currency.ts` holds a fixed, approximate USD→INR rate so the dashboard can show one combined margin figure rather than two costs in currencies nobody can compare to revenue at a glance.
 
-## AI Provider Abstraction (post-Phase 7) — Kimi added alongside Claude
+## AI Provider Abstraction (post-Phase 7) — Kimi, Gemini, OpenAI added alongside Claude
 
-The user asked for Kimi (Moonshot AI) to be added once they had a real API key — explicitly **alongside** Claude, not replacing it (confirmed via two rounds of clarification). Claude stays the default, matching the master spec's original Anthropic decision; the switch is opt-in.
+The user asked for Kimi (Moonshot AI) to be added once they had a real API key — explicitly **alongside** Claude, not replacing it (confirmed via two rounds of clarification) — then, in the same sitting, asked for Gemini and OpenAI too, using the identical pattern. Claude stays the default throughout, matching the master spec's original Anthropic decision; every other provider is opt-in.
 
-Verified directly against Kimi's own docs before writing any code (not guessed, same discipline as Buffer/Google): `platform.moonshot.ai` 301-redirects to `platform.kimi.ai`; the API is genuinely OpenAI-compatible (`POST https://api.moonshot.ai/v1/chat/completions`, `Authorization: Bearer $MOONSHOT_API_KEY`, standard `messages`/`choices`/`usage` shape). Plain `fetch()`, not the `openai` npm package — matches this codebase's unbroken precedent (Buffer, 4 Google APIs, YouTube all use `fetch()` over an available SDK) for a single-endpoint, no-streaming, no-tools integration.
+Each provider's real API was verified directly against its own current docs before writing any code (not guessed, same discipline as Buffer/Google) — worth recording since two of the three had real, dated drift from what training data alone would assume:
+- **Kimi**: `platform.moonshot.ai` 301-redirects to `platform.kimi.ai`; genuinely OpenAI-compatible (`POST https://api.moonshot.ai/v1/chat/completions`, `Authorization: Bearer`, standard `messages`/`choices`/`usage` shape).
+- **Gemini**: `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`, `contents`/`parts`/`candidates`/`usageMetadata` shape. **Google migrated to a new API key format in September 2026** (this same month) that requires the `x-goog-api-key` header — the older `?key=` query-param auth is being phased out for newly issued keys, so the header is what this integration uses.
+- **OpenAI**: `POST https://api.openai.com/v1/responses` — OpenAI's now-current-recommended Responses API, not the older Chat Completions shape Kimi's compatibility layer mimics. `input`/`instructions`/`max_output_tokens` request fields, `output_text`/`usage.input_tokens`/`usage.output_tokens` response fields — a genuinely different shape from Kimi's, verified separately rather than assumed identical just because both vendors are "OpenAI-family."
+
+Plain `fetch()` for all three, not an SDK — matches this codebase's unbroken precedent (Buffer, 4 Google APIs, YouTube all use `fetch()` over an available SDK) for single-endpoint, no-streaming, no-tools integrations.
 
 ```
 lib/ai/provider.ts — generateText({system, user, maxTokens}, opts?) — the one place every
-  "simple generation" function calls instead of touching the Anthropic SDK (or Kimi's fetch
-  client) directly.
-    resolveProvider(): opts?.provider ?? (AI_PROVIDER==='kimi' ? 'kimi' : 'anthropic')
+  "simple generation" function calls instead of touching any provider's SDK/fetch client
+  directly.
+    resolveProvider(): opts?.provider ?? AI_PROVIDER (if one of the 4 known values) ?? 'anthropic'
       — unset/unrecognized always falls back to anthropic, zero config required.
     -> lib/ai/providers/anthropic.ts (generateWithAnthropic) — owns the ANTHROPIC_API_KEY
        pre-flight check, the messages.create() call (model = HAIKU_MODEL, unchanged), and the
        AuthenticationError/RateLimitError/APIError -> AiGenerationError classification.
-    -> lib/ai/providers/kimi.ts (generateWithKimi) — owns the MOONSHOT_API_KEY pre-flight
-       check, a fetch() POST to Kimi's chat/completions endpoint (model kimi-k2.6), response
-       parsing, and the same AiGenerationError normalization (401 -> invalid key, 429 -> rate
-       limited, else the raw message) — no new error class; every existing catch
-       (err instanceof AiGenerationError) up the stack keeps working unchanged.
-  Stamps `provider` onto the returned usage — the one place that happens, so none of the 6
-  existing logAiUsage(...) call sites needed to change.
+    -> lib/ai/providers/kimi.ts (generateWithKimi) — MOONSHOT_API_KEY, model kimi-k2.6.
+    -> lib/ai/providers/gemini.ts (generateWithGemini) — GEMINI_API_KEY (sent as the
+       x-goog-api-key header, not a query param — see above), model gemini-3.5-flash-lite.
+    -> lib/ai/providers/openai.ts (generateWithOpenai) — OPENAI_API_KEY, model gpt-5.6-luna,
+       calls the Responses API.
+  Every provider module does its own pre-flight key check, fetch() call, response parsing, and
+  AiGenerationError normalization (401/403 -> invalid key, 429 -> rate limited, else the raw
+  message) — no new error class per provider; every existing catch
+  (err instanceof AiGenerationError) up the stack keeps working unchanged regardless of which
+  provider is active. Stamps `provider` onto the returned usage — the one place that happens,
+  so none of the 6 existing logAiUsage(...) call sites needed to change.
 
 The 4 "simple generation" files (generate-content.ts, generate-report.ts,
 assess-opportunity.ts, draft-outreach.ts, prepare-campaign.ts) each lost their own
@@ -420,17 +429,31 @@ ANTHROPIC_API_KEY guard + try/catch + direct SDK call, replaced by one
 building, JSON parsing, per-field fallbacks). generateCaption() alone keeps an
 `opts?: {provider?: AiProvider}` passthrough, since it has a second call site (below).
 
-AI Assistant stays Claude-only, deliberately: Anthropic's ToolUseBlock/tool_result shape has
-no structural equivalent in Kimi's OpenAI-style tool_calls/role:"tool" shape, and porting
-runAssistantChat's loop would mean maintaining two state machines — real scope beyond this
-integration. assistant-tools.ts's regenerate_content tool pins its generateCaption() call to
-{provider: "anthropic"} explicitly, so AI_PROVIDER=kimi can never silently reach the assistant
-through that one indirect path (a single assistant turn's usage-log row can't correctly blend
-two providers' token counts under one price). assistant-chat.ts's own finish() hardcodes
-provider: "anthropic" in the usage object it logs, for the same reason.
+**Model picks all follow the same rule**: each provider's own current-generation small/cheap
+tier (mirrors Haiku 4.5's role for Claude), not the single globally-cheapest model across every
+generation that vendor has ever shipped — e.g. `gemini-3.5-flash-lite` over the older, cheaper
+`gemini-2.5-flash-lite`; `gpt-5.6-luna` over the older `gpt-4o-mini` (`gpt-6-astra`, the newest
+OpenAI flagship as of this writing, has no smaller sibling yet). Consistency here matters more
+than shaving another fraction of a cent per call.
+
+**Still one global switch, not per-org**: `AI_PROVIDER` picks one provider for the whole
+deployment, same as when only Kimi existed — not a per-client selector in the admin/client UI.
+Deliberately not built unless asked for; 4 providers behind one env var is still simpler than a
+new settings surface nobody requested.
+
+AI Assistant stays Claude-only, deliberately: Anthropic's ToolUseBlock/tool_result shape has no
+structural equivalent in any of the other three providers' tool-calling shapes (Kimi and OpenAI
+use their own, mutually different, OpenAI-style tool_calls/role:"tool" conventions; Gemini uses
+yet another functionCall/functionResponse convention) — porting runAssistantChat's loop would
+mean maintaining four state machines for one feature, real scope beyond this integration.
+assistant-tools.ts's regenerate_content tool pins its generateCaption() call to
+{provider: "anthropic"} explicitly, so AI_PROVIDER=kimi/gemini/openai can never silently reach
+the assistant through that one indirect path (a single assistant turn's usage-log row can't
+correctly blend two providers' token counts under one price). assistant-chat.ts's own finish()
+hardcodes provider: "anthropic" in the usage object it logs, for the same reason.
 ```
 
-`lib/constants/ai-pricing.ts` gained `estimateKimiCostUsd()` using `kimi-k2.6`'s real published rate ($0.95/$4.00 per MTok input/output, verified against platform.kimi.ai — cache-miss rate, since nothing here uses prompt caching) and `estimateAiCostUsd(provider, ...)` dispatching between it and the existing Haiku estimator, so `/admin/costs` needed **zero changes** — it only ever summed `estimated_cost_usd`, agnostic to how that number was computed. `ai_usage_events.provider` (migration `0019_ai_provider_tracking.sql`) is a plain new column covered by the existing row-level RLS policies with no RLS change needed.
+`lib/constants/ai-pricing.ts` gained `estimateKimiCostUsd()`/`estimateGeminiCostUsd()`/`estimateOpenaiCostUsd()`, each using that provider's real published rate verified directly against its own pricing page (Kimi: platform.kimi.ai, $0.95/$4.00 per MTok; Gemini: ai.google.dev, $0.30/$2.50; OpenAI: developers.openai.com, $0.20/$1.20 — all cache-miss rates, since nothing here uses prompt caching), and `estimateAiCostUsd(provider, ...)` dispatches across all four via a lookup table, so `/admin/costs` needed **zero changes** — it only ever summed `estimated_cost_usd`, agnostic to how that number was computed. `ai_usage_events.provider` (`0019_ai_provider_tracking.sql` added the column for Kimi; `0020_ai_provider_gemini_openai.sql` widened its `CHECK` constraint for Gemini/OpenAI) is covered by the existing row-level RLS policies throughout, no RLS change needed either time.
 
 ## Sandbox/Test Client (Phase 7, spec §31)
 
@@ -447,7 +470,7 @@ lib/
   audit/                logAudit() helper used by every mutating action
   auth/                 getPostLoginRedirect(), requireSuperAdmin(), requireOrgMember()
   ai/                   client.ts (shared Anthropic client/model), provider.ts (generateText()
-                        dispatcher, post-Phase 7), providers/anthropic.ts + providers/kimi.ts,
+                        dispatcher, post-Phase 7), providers/{anthropic,kimi,gemini,openai}.ts,
                         generate-content.ts (captions), generate-report.ts (report narratives),
                         assess-opportunity.ts, draft-outreach.ts (Phase 5), prepare-campaign.ts
                         (Phase 6), log-usage.ts, assistant-tools.ts, assistant-chat.ts (Phase 7,
