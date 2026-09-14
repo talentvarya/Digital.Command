@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicClient, HAIKU_MODEL, AiGenerationError } from "@/lib/ai/client";
+import { getAnthropicClient, HAIKU_MODEL, AiGenerationError, readableApiErrorMessage } from "@/lib/ai/client";
 import type { GenerateTextParams, GenerateTextResult } from "@/lib/ai/provider";
 
 export async function generateWithAnthropic(params: GenerateTextParams): Promise<GenerateTextResult> {
@@ -31,7 +31,7 @@ export async function generateWithAnthropic(params: GenerateTextParams): Promise
       throw new AiGenerationError("AI generation is rate-limited right now — please try again shortly.");
     }
     if (error instanceof Anthropic.APIError) {
-      throw new AiGenerationError(`AI generation failed: ${error.message}`);
+      throw new AiGenerationError(`AI generation failed: ${readableApiErrorMessage(error)}`);
     }
     throw error;
   }

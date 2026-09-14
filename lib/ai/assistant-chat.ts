@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getAnthropicClient, HAIKU_MODEL, AiGenerationError } from "@/lib/ai/client";
+import { getAnthropicClient, HAIKU_MODEL, AiGenerationError, readableApiErrorMessage } from "@/lib/ai/client";
 import { ASSISTANT_TOOLS, executeAssistantTool, type AssistantContext } from "@/lib/ai/assistant-tools";
 import { logAiUsage } from "@/lib/ai/log-usage";
 
@@ -71,7 +71,7 @@ export async function runAssistantChat(
       if (error instanceof Anthropic.RateLimitError) {
         throw new AiGenerationError("The assistant is rate-limited right now — please try again shortly.");
       }
-      if (error instanceof Anthropic.APIError) throw new AiGenerationError(`Assistant failed: ${error.message}`);
+      if (error instanceof Anthropic.APIError) throw new AiGenerationError(`Assistant failed: ${readableApiErrorMessage(error)}`);
       throw error;
     }
 
