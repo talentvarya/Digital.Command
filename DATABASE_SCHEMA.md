@@ -2,6 +2,8 @@
 
 Full SQL lives in `supabase/migrations/`. This is the human-readable map.
 
+`0018_fix_org_select_on_create.sql` (post-Phase 7) fixes a real bug found during the first live-database verification pass: `organizations_select`'s RLS policy blocked a user from seeing the org they had just created (no `organization_members` row exists yet at that exact moment), which broke registration's `INSERT ... RETURNING` for everyone, always, since Phase 1. Full diagnosis in `SECURITY_AND_RLS.md`, context in `PROJECT_PLAN.md`'s "Live database verification" section.
+
 ## Tables created in Phase 1
 
 | Table | Purpose | Key columns |

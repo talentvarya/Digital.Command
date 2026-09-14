@@ -1,0 +1,26 @@
+-- Digital Command — fixes a real, previously-undetectable registration bug
+-- found during the first-ever live-database verification pass (see
+-- PROJECT_PLAN.md / SECURITY_AND_RLS.md for the full story).
+--
+-- completeRegistrationAction (app/register/actions.ts) does
+-- `.from("organizations").insert({...}).select("id").single()` — under
+-- Postgres RLS, `INSERT ... RETURNING` enforces the table's SELECT policy on
+-- the row being returned, not just the INSERT policy on the row being
+-- written. organizations_select was `is_org_member(id) OR is_super_admin()`
+-- — but at the exact moment a brand-new organization is inserted, no
+-- organization_members row exists yet (that gets created in a LATER step of
+-- the same action), so the creating user couldn't "see" the row they had
+-- just created, and the whole request failed with "new row violates row
+-- level security policy for table organizations" even though the INSERT
+-- itself was perfectly valid. Every registration through this app would
+-- have hit this — it was invisible until tested against a real database
+-- with RLS actually enforced.
+--
+-- Fix: let a user see an org they created, even before membership exists.
+-- `created_by = auth.uid()` is already this schema's established trust
+-- anchor for "this is genuinely your own org" — organization_members_insert_self
+-- (0002_rls.sql) already keys off the exact same condition to let a user add
+-- themselves as owner. This mirrors that, it does not introduce a new trust
+-- concept.
+alter policy organizations_select on public.organizations
+  using (public.is_org_member(id) or public.is_super_admin() or created_by = auth.uid());

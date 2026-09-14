@@ -37,6 +37,7 @@ Copy `../.env.example` to `../.env.local` and fill these in.
 15. `migrations/0015_phase6_rls.sql` — Phase 6 row-level security policies
 16. `migrations/0016_phase7_schema.sql` — AI usage tracking, conversion tracking, system settings (Emergency Freeze), offboarded/sandbox markers, two Phase-1/2 bug fixes (see §7 below)
 17. `migrations/0017_phase7_rls.sql` — Phase 7 row-level security policies, including the `client_settings` owner-update fix
+18. `migrations/0018_fix_org_select_on_create.sql` — fixes a bug found during the first live-database verification pass that blocked registration from ever completing (see `PROJECT_PLAN.md`'s "Live database verification" section and `SECURITY_AND_RLS.md`)
 
 (Equivalently, if you use the Supabase CLI: `supabase db push` after linking the project, with these files under `supabase/migrations/`.)
 

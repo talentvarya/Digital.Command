@@ -19,7 +19,7 @@ There is **no self-serve path to `super_admin`** — every new signup becomes `c
 | Table | Client (org member) | Super Admin |
 |---|---|---|
 | `profiles` | SELECT/UPDATE own row (role column not grantable) | SELECT/UPDATE all |
-| `organizations` | SELECT own org; UPDATE only while `draft → draft/pending_approval` | SELECT/UPDATE all (activation, rejection, pause) |
+| `organizations` | SELECT own org **or an org they created** (see note below); UPDATE only while `draft → draft/pending_approval` | SELECT/UPDATE all (activation, rejection, pause) |
 | `organization_members` | SELECT own org's members; INSERT self as `owner` of an org they created | Full access |
 | `plans`, `policy_versions` | SELECT (public pricing/legal text) | Full access |
 | `subscriptions` | SELECT own; INSERT with `status='pending'` only | UPDATE (activation dates, status) |
@@ -31,6 +31,16 @@ There is **no self-serve path to `super_admin`** — every new signup becomes `c
 | `audit_logs` | SELECT own org; INSERT own actions — **no UPDATE/DELETE for anyone** | SELECT all |
 
 Append-only tables (`audit_logs`, `consent_records`, `verification_documents`, `content_versions`) have **no UPDATE/DELETE policy at all** — not "restricted", genuinely absent, so Postgres denies by default regardless of role tampering.
+
+### `organizations_select` fix (`0018_fix_org_select_on_create.sql`) — found during the first live-database verification pass, blocked every registration
+
+The single most consequential bug found in this whole project, because it blocked the most foundational flow — registration — completely, for every user, in any real deployment, from Phase 1 onward. Never caught because it only manifests under genuine RLS enforcement, which nothing in this codebase's own build/lint/browser-route-guard checks ever exercised.
+
+`completeRegistrationAction` (`app/register/actions.ts`) creates a brand-new org with `.from("organizations").insert({...}).select("id").single()`. Under Postgres RLS, `INSERT ... RETURNING` enforces the table's **SELECT** policy on the row being returned — not just the INSERT policy on the row being written. The original `organizations_select` policy was `is_org_member(id) OR is_super_admin()`, but at the exact moment a new org is inserted, no `organization_members` row exists yet (that's a later step in the same action) — so the very user who just created the org couldn't "see" it for the RETURNING clause, and Postgres surfaced this as `new row violates row-level security policy for table "organizations"` even though the INSERT itself was perfectly valid per `organizations_insert`'s own check.
+
+Diagnosed by: creating a temporary `debug_whoami()` SQL function (`security definer`, returns `auth.uid()`/`auth.jwt()`) and a temporary debug route calling it in the exact same request as a real insert — confirmed `auth.uid()` matched `created_by` exactly, then confirmed the same insert succeeded cleanly with `.select()` removed, isolating the RETURNING-clause SELECT check as the actual cause. Both debug artifacts were removed before this fix was committed.
+
+Fix: `organizations_select` now also allows `created_by = auth.uid()` — a user can always see an org they created, even before any membership row exists. This isn't a new trust concept: `organization_members_insert_self` (`0002_rls.sql`) already keys off the exact same `created_by = auth.uid()` condition to let a user add themselves as the owning member in the first place. No other insert-then-`.select()` pattern in this codebase has the same gap — every other table's rows are only ever created by someone who is *already* an org member of an *already-existing* org, so `is_org_member()` is already true at their insert time; `organizations` is the one chicken-and-egg case where the row establishes the org identity itself, before the membership relationship that would normally grant visibility exists.
 
 ### Phase 2 additions (`supabase/migrations/0006_phase2_rls.sql`)
 
