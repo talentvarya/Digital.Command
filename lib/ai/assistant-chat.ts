@@ -47,7 +47,7 @@ export async function runAssistantChat(
       orgId: ctx.orgId,
       feature: "assistant_chat",
       // Always "anthropic": the assistant's tool-calling loop below is Claude-specific
-      // (Anthropic.TextBlock/ToolUseBlock), not portable to Kimi's tool-call shape.
+      // (Anthropic.TextBlock/ToolUseBlock), not portable to the other providers' tool-call shapes.
       usage: { inputTokens, outputTokens, provider: "anthropic" },
     });
     return { reply };

@@ -225,7 +225,7 @@ export async function executeAssistantTool(name: string, input: Record<string, u
     try {
       // Pinned to Anthropic regardless of AI_PROVIDER: the assistant's tool-calling
       // loop is Claude-specific (see runAssistantChat), so a single turn must not
-      // blend a Kimi-generated caption's usage into an Anthropic-priced log row.
+      // blend another provider's caption-generation usage into an Anthropic-priced log row.
       generated = await generateCaption(
         {
           platform: found.item.platform as ContentPlatform,
