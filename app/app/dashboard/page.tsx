@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
-import { Search, Link2, Share2, Youtube, MapPin, CalendarClock, ClipboardList, FileBarChart } from "lucide-react";
+import { Search, Link2, Share2, Youtube, MapPin, FileBarChart, Palette, ClipboardList } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ComingSoonCard } from "@/components/client/ComingSoonCard";
-import { BILLING_TERM_LABELS, formatInr } from "@/lib/constants/plans";
+import { ModuleLinkCard } from "@/components/client/ModuleLinkCard";
+import { BILLING_TERM_LABELS } from "@/lib/constants/plans";
 
 function daysRemaining(expiry: string | null): number | null {
   if (!expiry) return null;
@@ -84,13 +85,13 @@ export default async function ClientDashboardPage() {
       <section>
         <h2 className="mb-3 text-lg font-semibold text-ink-900">Modules</h2>
         <div className="grid gap-3 sm:grid-cols-2">
-          <ComingSoonCard icon={Link2} title="Website & Channel Connections" />
-          <ComingSoonCard icon={ClipboardList} title="7-Day Content Planner" />
-          <ComingSoonCard icon={CalendarClock} title="Approval Queue" />
+          <ModuleLinkCard icon={Palette} title="Brand Brain" subtitle="Voice, visuals & guardrails for AI content" href="/app/brand" />
+          <ModuleLinkCard icon={ClipboardList} title="7-Day Content Planner" subtitle="Generate, review & approve — includes your approval queue" href="/app/planner" />
+          <ModuleLinkCard icon={Link2} title="Website & Channel Connections" subtitle="Add links, check they're reachable" href="/app/links" />
           <ComingSoonCard icon={FileBarChart} title="Reports" />
           <ComingSoonCard icon={Search} title="SEO" />
           <ComingSoonCard icon={Link2} title="Off-Page SEO" />
-          <ComingSoonCard icon={Share2} title="SMO (Facebook / Instagram)" />
+          <ComingSoonCard icon={Share2} title="SMO Publishing (Facebook / Instagram)" />
           <ComingSoonCard icon={Youtube} title="YouTube" />
           <ComingSoonCard icon={MapPin} title="Local SEO / Google Business Profile" />
         </div>

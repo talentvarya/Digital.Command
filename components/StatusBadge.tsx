@@ -12,6 +12,14 @@ const STATUS_STYLES: Record<string, string> = {
   expired: "bg-slate-200 text-slate-800",
   rejected: "bg-red-100 text-red-800",
   cancelled: "bg-red-100 text-red-800",
+  waiting_approval: "bg-amber-100 text-amber-800",
+  scheduled: "bg-brand-100 text-brand-700",
+  published: "bg-emerald-100 text-emerald-800",
+  skipped: "bg-slate-200 text-slate-800",
+  connected: "bg-emerald-100 text-emerald-800",
+  not_added: "bg-slate-200 text-slate-800",
+  reconnect_required: "bg-orange-100 text-orange-800",
+  error: "bg-red-100 text-red-800",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -19,6 +27,9 @@ const STATUS_LABELS: Record<string, string> = {
   pending_review: "Pending Review",
   pending_verification: "Pending Verification",
   more_documents_required: "More Documents Required",
+  waiting_approval: "Waiting Approval",
+  not_added: "Not Added",
+  reconnect_required: "Reconnect Required",
 };
 
 export function StatusBadge({ status }: { status: string }) {

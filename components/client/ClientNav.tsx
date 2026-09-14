@@ -4,8 +4,10 @@ import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { createClient } from "@/lib/supabase/client";
+import { NotificationsBell } from "@/components/client/NotificationsBell";
+import type { Notification } from "@/types/database";
 
-export function ClientNav() {
+export function ClientNav({ notifications }: { notifications: Notification[] }) {
   const router = useRouter();
 
   async function handleLogout() {
@@ -18,10 +20,13 @@ export function ClientNav() {
     <header className="border-b border-ink-100 bg-white">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <Logo subtitle={false} />
-        <button onClick={handleLogout} className="flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-800">
-          <LogOut className="h-4 w-4" />
-          Log out
-        </button>
+        <div className="flex items-center gap-3">
+          <NotificationsBell notifications={notifications} />
+          <button onClick={handleLogout} className="flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-800">
+            <LogOut className="h-4 w-4" />
+            Log out
+          </button>
+        </div>
       </div>
     </header>
   );

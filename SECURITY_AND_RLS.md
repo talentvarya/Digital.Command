@@ -2,7 +2,7 @@
 
 ## Principle
 
-Authorization lives in Postgres RLS, not in application code. Server actions run under the **calling user's own session** (the anon key + their JWT), so even a bug in a server action can't let a client see or modify another organization's data — Postgres itself refuses the query. The `SUPABASE_SERVICE_ROLE_KEY` is provisioned for future admin/backfill tooling but is **not used by any Phase 1 mutation**.
+Authorization lives in Postgres RLS, not in application code. Server actions run under the **calling user's own session** (the anon key + their JWT), so even a bug in a server action can't let a client see or modify another organization's data — Postgres itself refuses the query. The `SUPABASE_SERVICE_ROLE_KEY` is provisioned for future admin/backfill tooling but is **not used by any Phase 1 or Phase 2 mutation**. The new `ANTHROPIC_API_KEY` (Phase 2) is likewise server-only, read exclusively inside `lib/ai/generate-content.ts`, never sent to the browser.
 
 ## Role model
 
@@ -28,11 +28,23 @@ There is **no self-serve path to `super_admin`** — every new signup becomes `c
 | `client_settings` | SELECT own | UPDATE (created only by the activation trigger) |
 | `audit_logs` | SELECT own org; INSERT own actions — **no UPDATE/DELETE for anyone** | SELECT all |
 
-Append-only tables (`audit_logs`, `consent_records`, `verification_documents`) have **no UPDATE/DELETE policy at all** — not "restricted", genuinely absent, so Postgres denies by default regardless of role tampering.
+Append-only tables (`audit_logs`, `consent_records`, `verification_documents`, `content_versions`) have **no UPDATE/DELETE policy at all** — not "restricted", genuinely absent, so Postgres denies by default regardless of role tampering.
+
+### Phase 2 additions (`supabase/migrations/0006_phase2_rls.sql`)
+
+| Table | Client (org member) | Super Admin |
+|---|---|---|
+| `brand_profiles`, `org_links` | Full CRUD on their own org's rows — this is the client's own creative/config data | SELECT only (support visibility, no editing control) |
+| `content_items` | Full CRUD; DELETE additionally requires `locked = false` at the RLS layer (see below) | SELECT only — approval is the client's call, not admin's |
+| `content_media` | INSERT/SELECT/DELETE own | SELECT only |
+| `content_versions` | SELECT/INSERT own — **no UPDATE/DELETE for anyone** | SELECT all |
+| `notifications` | SELECT own; INSERT own; UPDATE limited to the `read` column (column-level grant, same pattern as `profiles.role`) | SELECT all; INSERT (e.g. activation notices) |
+
+**Locked items and silent no-ops**: `content_items`' DELETE policy checks `locked = false` in `USING`, so Postgres silently deletes 0 rows (no error) if a client tries to delete a locked item via a stale UI state or a direct call. `deleteContentItemAction` explicitly checks the returned row count and surfaces a friendly error instead of reporting false success — worth remembering as a pattern any time an RLS policy adds a conditional beyond plain org-ownership. `locked` is **not** encoded into the UPDATE policy (only app-layer checks in each action) because an update-side lock check would also block the unlock action itself; a `locked` UPDATE-blocking policy is a UX/workflow guard, not a tenant-isolation boundary, so it stays at the application layer deliberately.
 
 ## Storage
 
-Both buckets (`verification-documents`, `payment-screenshots`) are private. Policies check `is_org_member((storage.foldername(name))[1]::uuid)` or `is_super_admin()` against the `{org_id}/...` path prefix, mirroring the owning table's access rules. Signed URLs (short-lived, generated server-side) are used to display documents in the admin review UI — nothing is ever public.
+All four buckets (`verification-documents`, `payment-screenshots`, `brand-assets`, `content-media`) are private. Policies check `is_org_member((storage.foldername(name))[1]::uuid)` or `is_super_admin()` against the `{org_id}/...` path prefix, mirroring the owning table's access rules. Signed URLs (short-lived, generated server-side) are used to display documents/media — nothing is ever public.
 
 ## MFA
 
@@ -43,7 +55,8 @@ Super Admin accounts must enroll TOTP (Supabase Auth's native MFA — no third-p
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — safe for the browser (RLS is what actually protects data, not key secrecy).
 - `SUPABASE_SERVICE_ROLE_KEY` — server-only, currently unused by app code; reserved for future admin tooling. Never imported into a Client Component.
 
-## What Phase 1 does NOT cover yet
+## What's still not covered
 
 - Rate limiting, login-history UI, suspicious-activity alerts (spec §26) — infra-level concerns better handled by Supabase's own auth rate limits initially; a dedicated implementation is a later-phase item.
 - Real KYC/Aadhaar verification — documents are stored and reviewed by a human, not verified against a government API.
+- AI generation has no per-client rate limit or cost cap yet (spec §30/§32 flags this as a real risk — "do not allow a plan to silently become loss-making"). Haiku is cheap, but a client mashing "Generate Another" has no ceiling today. Worth a fair-use limit before onboarding paying clients.

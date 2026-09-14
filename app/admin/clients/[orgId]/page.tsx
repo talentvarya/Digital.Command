@@ -7,6 +7,7 @@ import { PaymentReviewForm } from "@/components/admin/PaymentReviewForm";
 import { ActivationPanel } from "@/components/admin/ActivationPanel";
 import { BUSINESS_TYPE_LABELS, BUSINESS_TYPE_REQUIREMENTS } from "@/lib/constants/business";
 import { BILLING_TERM_LABELS, formatInr } from "@/lib/constants/plans";
+import { PLATFORM_LABELS } from "@/lib/constants/content";
 import type { BusinessType } from "@/types/database";
 
 export default async function AdminClientDetailPage({ params }: { params: { orgId: string } }) {
@@ -42,6 +43,18 @@ export default async function AdminClientDetailPage({ params }: { params: { orgI
   const docLabelByKey = new Map(requirements.documents.map((d) => [d.key, d.label]));
 
   const canActivate = verification?.status === "approved" && latestPayment?.status === "verified" && org.status === "pending_approval";
+
+  const { data: brand } = org.status === "active"
+    ? await supabase.from("brand_profiles").select("*").eq("org_id", org.id).maybeSingle()
+    : { data: null };
+  const { data: upcomingContent } = org.status === "active"
+    ? await supabase
+        .from("content_items")
+        .select("id, platform, scheduled_date, status, source")
+        .eq("org_id", org.id)
+        .order("scheduled_date", { ascending: true })
+        .limit(10)
+    : { data: [] };
 
   return (
     <div className="space-y-6">
@@ -141,6 +154,42 @@ export default async function AdminClientDetailPage({ params }: { params: { orgI
               <p className="text-sm text-ink-400">No payment submitted yet.</p>
             )}
           </section>
+
+          {org.status === "active" && (
+            <section className="card">
+              <h2 className="mb-3 text-lg font-semibold text-ink-900">Brand & Content (read-only)</h2>
+              <p className="mb-3 text-xs text-ink-400">
+                Support visibility only — approval and edits belong to the client.
+              </p>
+              {brand ? (
+                <dl className="mb-4 grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <dt className="text-xs uppercase text-ink-400">Tone</dt>
+                    <dd className="text-ink-800">{brand.preferred_tone ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs uppercase text-ink-400">Target audience</dt>
+                    <dd className="text-ink-800">{brand.target_audience ?? "—"}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="mb-4 text-sm text-ink-400">Brand Brain not set up yet.</p>
+              )}
+              <div className="space-y-1">
+                {(upcomingContent ?? []).length === 0 && (
+                  <p className="text-sm text-ink-400">No content planned in the next 7 days.</p>
+                )}
+                {(upcomingContent ?? []).map((item) => (
+                  <div key={item.id} className="flex items-center justify-between border-b border-ink-50 py-1.5 text-sm last:border-0">
+                    <span className="text-ink-700">
+                      {item.scheduled_date} · {PLATFORM_LABELS[item.platform as keyof typeof PLATFORM_LABELS]}
+                    </span>
+                    <StatusBadge status={item.status} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section className="card">
             <h2 className="mb-3 text-lg font-semibold text-ink-900">Audit Trail</h2>

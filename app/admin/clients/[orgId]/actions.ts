@@ -130,6 +130,13 @@ export async function activateOrgAction(_prevState: ActionResult, formData: Form
   const { error } = await supabase.from("organizations").update({ status: "active" }).eq("id", orgId);
   if (error) return { error: error.message };
 
+  await supabase.from("notifications").insert({
+    org_id: orgId,
+    type: "account_activated",
+    title: "Your account is now active",
+    body: "A Super Admin approved your registration. Set up your Brand Brain and start your 7-Day Planner.",
+  });
+
   await logAudit(supabase, {
     orgId,
     actorUserId: admin.id,

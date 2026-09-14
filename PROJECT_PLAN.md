@@ -6,8 +6,8 @@ Source of truth: `Digital_Command_Claude_Master_Build_Spec.md` (owner-supplied).
 
 | Phase | Scope | Status |
 |---|---|---|
-| **1** | Branding shell, Supabase Auth, multi-tenant DB + RLS, Super Admin, client registration, policy acceptance, business verification, manual payment verification, client activation | **This build** |
-| 2 | Client dashboard, Brand Brain, website/link setup, 7-day planner, Autopilot/Approval Required, content versions, notifications | Not started |
+| 1 | Branding shell, Supabase Auth, multi-tenant DB + RLS, Super Admin, client registration, policy acceptance, business verification, manual payment verification, client activation | ✅ Built |
+| **2** | Client dashboard, Brand Brain, website/link setup, 7-day planner, Autopilot/Approval Required, content versions, notifications | **This build** |
 | 3 | SEO audit, Search Console, Analytics, reporting, graphs, keyword/competitor tracking | Not started |
 | 4 | Buffer integration, Facebook/Instagram publishing, YouTube, GBP/Local SEO | Not started |
 | 5 | Off-page opportunity engine, outreach, digital PR, backlink verification | Not started |
@@ -29,3 +29,19 @@ Source of truth: `Digital_Command_Claude_Master_Build_Spec.md` (owner-supplied).
 - No real KYC/Aadhaar verification API (open item — spec §37.1/§37.2); documents are reviewed by a human Super Admin.
 - No email receipts (spec §20) — audit log is the authoritative record until a later phase wires up an email provider (open item §37.4).
 - No paid-advertising anything (Phase 6) — not even a placeholder UI, to avoid any risk of implying auto-spend.
+
+## Phase 2 exit criteria
+
+- A client can fill out their Brand Brain (spec §18) and every field feeds real AI generation prompts.
+- A client can add/edit/remove website & channel links and run a real reachability health check (spec §12's URL-storage half; OAuth "Connect Account" is Phase 4).
+- A client can generate real AI captions (Anthropic API) for a 7-day planner slot, edit them, approve/reject/skip, regenerate up to 3 times, then must add a suggestion to regenerate again (spec §10's revision flow), or upload their own content directly.
+- Autopilot mode auto-schedules AI content unless it trips the words-to-avoid policy check, in which case it's held for approval and the client is notified — a real gate, not a no-op.
+- Super Admin gets read-only visibility into a client's Brand Brain and upcoming planner content (support, not editing control).
+- `npm run lint` and `npm run build` stay clean.
+
+## Explicit non-goals for Phase 2
+
+- No actual publishing to Facebook/Instagram/YouTube — content's realistic terminal state is `scheduled`, not `published` (that's Phase 4/Buffer).
+- No background cron / unattended scheduling — generation is on-demand (button click); true zero-click automation needs a hosting decision that's still open (spec §37.3).
+- No AI image/video generation — planner media is manually uploaded (AI image/video gen is a separate, later, extra-priced feature per spec §15/§16).
+- No email notifications — the in-app `notifications` table is the only channel so far, consistent with Phase 1's deferral of email receipts.

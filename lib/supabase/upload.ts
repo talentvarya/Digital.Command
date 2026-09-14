@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 
+export type OrgFileBucket = "verification-documents" | "payment-screenshots" | "brand-assets" | "content-media";
+
 export async function uploadOrgFile(
   supabase: SupabaseClient,
-  bucket: "verification-documents" | "payment-screenshots",
+  bucket: OrgFileBucket,
   orgId: string,
   file: File
 ): Promise<string> {

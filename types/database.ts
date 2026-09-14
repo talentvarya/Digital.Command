@@ -134,10 +134,124 @@ export interface Payment {
   reason: string | null;
 }
 
+export type ContentControlMode = "autopilot" | "approval_required";
+
 export interface ClientSettings {
   org_id: string;
   automation_status: string;
   master_stop: boolean;
+  content_control_mode: ContentControlMode;
+  approval_then_autopilot: boolean;
+  autopilot_since: string | null;
+}
+
+export interface BrandProfile {
+  org_id: string;
+  logo_path: string | null;
+  colors: string[];
+  fonts: string[];
+  business_description: string | null;
+  products_services: string | null;
+  target_audience: string | null;
+  locations: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  offers: string | null;
+  cta_style: string | null;
+  preferred_tone: string | null;
+  words_to_avoid: string[];
+  image_style: string | null;
+  video_style: string | null;
+  competitors: string[];
+  reference_content: string | null;
+  approved_examples: string | null;
+  updated_at: string;
+}
+
+export type LinkType =
+  | "website"
+  | "blog"
+  | "google_business_profile"
+  | "facebook"
+  | "instagram"
+  | "youtube"
+  | "x"
+  | "pinterest"
+  | "other";
+
+export type LinkStatus = "connected" | "not_added" | "reconnect_required" | "error";
+
+export interface OrgLink {
+  id: string;
+  org_id: string;
+  link_type: LinkType;
+  url: string;
+  label: string | null;
+  status: LinkStatus;
+  last_checked_at: string | null;
+  last_check_result: string | null;
+}
+
+export type ContentPlatform = "facebook" | "instagram" | "youtube";
+
+export type ContentStatus =
+  | "draft"
+  | "waiting_approval"
+  | "approved"
+  | "scheduled"
+  | "published"
+  | "rejected"
+  | "skipped";
+
+export type ContentSource = "ai_generated" | "client_uploaded" | "admin_created" | "gpt_assistant_generated";
+
+export interface ContentItem {
+  id: string;
+  org_id: string;
+  platform: ContentPlatform;
+  scheduled_date: string;
+  scheduled_time: string | null;
+  caption: string | null;
+  hashtags: string[];
+  status: ContentStatus;
+  source: ContentSource;
+  control_mode: ContentControlMode;
+  locked: boolean;
+  rejection_count: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContentMedia {
+  id: string;
+  content_item_id: string;
+  org_id: string;
+  media_type: "image" | "video";
+  storage_path: string;
+}
+
+export interface ContentVersion {
+  id: string;
+  content_item_id: string;
+  org_id: string;
+  version_number: number;
+  caption: string | null;
+  hashtags: string[];
+  generated_by: "ai" | "client_suggestion" | "client_edit" | "admin";
+  client_suggestion_text: string | null;
+  created_at: string;
+}
+
+export interface Notification {
+  id: string;
+  org_id: string;
+  user_id: string | null;
+  type: string;
+  title: string;
+  body: string | null;
+  read: boolean;
+  created_at: string;
 }
 
 export interface AuditLog {

@@ -16,8 +16,21 @@ Full SQL lives in `supabase/migrations/`. This is the human-readable map.
 | `business_verifications` | KYC/verification workflow state | `status`, `details` (jsonb — CIN, registered office, etc.), `reviewed_by`/`reason` |
 | `verification_documents` | Uploaded doc metadata (files live in Storage) | `doc_type`, `storage_path` |
 | `payments` | Manual payment submission + review | `status` (`pending_verification`\|`verified`\|`rejected`) |
-| `client_settings` | Created automatically on activation | `automation_status`, `master_stop` |
+| `client_settings` | Created automatically on activation | `automation_status`, `master_stop`, + Phase 2: `content_control_mode`, `approval_then_autopilot`, `autopilot_since` |
 | `audit_logs` | Append-only action trail | `source` (`AUTOPILOT`\|`CLIENT_MANUAL`\|`ADMIN`\|`GPT_ASSISTANT`), `previous_state`/`new_state` jsonb |
+
+## Tables created in Phase 2
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `brand_profiles` | One row per org — every spec §18 field | `org_id` (pk), `colors`/`fonts`/`words_to_avoid`/`competitors` (jsonb arrays), `preferred_tone`, `cta_style`, `logo_path` |
+| `org_links` | Manual URL registry for websites/channels (spec §12's non-OAuth half) | `link_type`, `url`, `status` (`connected`\|`not_added`\|`reconnect_required`\|`error`), `last_checked_at`/`last_check_result` |
+| `content_items` | 7-Day Planner slots (spec §11) | `platform`, `scheduled_date`, `status` (`draft`→`waiting_approval`\|`scheduled`→…), `source`, `control_mode` snapshot, `locked`, `rejection_count` (= generation-attempt counter) |
+| `content_media` | One row per image/video attached to a content item | `media_type`, `storage_path` |
+| `content_versions` | Append-only AI-generation/edit history per item | `version_number`, `generated_by` (`ai`\|`client_suggestion`\|`client_edit`\|`admin`), `client_suggestion_text` |
+| `notifications` | In-app notices (email still deferred) | `org_id`, `user_id` (null = org-wide), `type`, `read` |
+
+`client_settings.content_control_mode` (`autopilot`\|`approval_required`, default `approval_required`) drives whether AI-generated content auto-schedules or waits for client approval — see `ARCHITECTURE.md`'s "AI content generation" section.
 
 ## Triggers / functions
 
@@ -27,11 +40,13 @@ Full SQL lives in `supabase/migrations/`. This is the human-readable map.
 
 ## Storage buckets
 
-- `verification-documents` (private)
-- `payment-screenshots` (private)
+- `verification-documents` (private) — Phase 1
+- `payment-screenshots` (private) — Phase 1
+- `brand-assets` (private) — Phase 2, logo uploads
+- `content-media` (private) — Phase 2, planner images/videos
 
-Both use the path convention `{org_id}/{uuid}-{filename}` so a single `storage.foldername(name)[1]` policy check scopes access per organization.
+All four use the path convention `{org_id}/{uuid}-{filename}` so a single `storage.foldername(name)[1]` policy check scopes access per organization.
 
 ## Tables from the spec's full list (§25) NOT yet created
 
-`websites`, `social_connections`, `brand_profiles`, `content_items`, `content_versions`, `content_approvals`, `automation_jobs`, `seo_metrics`, `keyword_metrics`, `backlink_opportunities`, `outreach_jobs`, `reports`, `report_metrics`, `notifications`, `api_connections`, `api_health_events`, `support_tickets`, `generated_assets` — these belong to Phase 2+ and are deliberately absent so Phase 1's schema doesn't imply functionality that doesn't exist yet.
+`websites`, `social_connections` (OAuth-authenticated publishing connections — `org_links` covers the manual-URL need for now), `content_approvals` (folded into `content_items.status` + `content_versions` history rather than a separate table — revisit if reporting needs a dedicated approval-events table), `automation_jobs`, `seo_metrics`, `keyword_metrics`, `backlink_opportunities`, `outreach_jobs`, `reports`, `report_metrics`, `api_connections`, `api_health_events`, `support_tickets`, `generated_assets` — these belong to Phase 3+ and are deliberately absent so the schema doesn't imply functionality that doesn't exist yet.
