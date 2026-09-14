@@ -10,6 +10,10 @@ import { GOOGLE_SERVICE_LABELS } from "@/lib/constants/google";
 import type { ActionResult } from "@/app/register/actions";
 import type { GoogleConnectionPublic, GoogleService } from "@/types/database";
 
+function pluralize(word: string): string {
+  return word.endsWith("y") ? `${word.slice(0, -1)}ies` : `${word}s`;
+}
+
 export function GoogleConnectionCard({
   service,
   connection,
@@ -47,7 +51,7 @@ export function GoogleConnectionCard({
                 <label className="field-label">Choose a {propertyLabel}</label>
                 <select name="property" className="field-input" defaultValue="" required>
                   <option value="" disabled>
-                    {properties && properties.length > 0 ? "Select…" : `No ${propertyLabel}s found on this Google account`}
+                    {properties && properties.length > 0 ? "Select…" : `No ${pluralize(propertyLabel)} found on this Google account`}
                   </option>
                   {(properties ?? []).map((p) => (
                     <option key={p.id} value={p.id}>
