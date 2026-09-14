@@ -90,7 +90,7 @@ export async function prepareCampaignAction(_prevState: ActionResult, formData: 
     orgId,
     actorUserId: userId,
     actorRole: "client_owner",
-    source: "AUTOPILOT",
+    source: "CLIENT_MANUAL",
     actionType: "paid_campaign_drafted",
     target: campaign.id,
     newState: { platform, name, objective },

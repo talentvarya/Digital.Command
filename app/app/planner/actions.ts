@@ -201,7 +201,7 @@ export async function generateAiContentAction(
     orgId,
     actorUserId: userId,
     actorRole: "client_owner",
-    source: "AUTOPILOT",
+    source: "CLIENT_MANUAL",
     actionType: "content_generated",
     target: itemId,
     newState: { status, attemptNumber, heldForPolicy },
