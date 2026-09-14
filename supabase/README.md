@@ -8,7 +8,8 @@
    - `anon public` key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` key → `SUPABASE_SERVICE_ROLE_KEY` (server-only, keep secret)
 3. Get an Anthropic API key at [console.anthropic.com](https://console.anthropic.com) → `ANTHROPIC_API_KEY` (server-only). Powers the 7-Day Planner's AI caption generation and (Phase 3) report narratives.
-4. Set up a Google Cloud OAuth app for `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (Phase 3, powers `/app/seo`'s Search Console + Analytics connections) — see `../.env.example` for the exact steps. **Read the note in step 5 below before spending time on this** — it has a real timeline implication.
+4. Set up a Google Cloud OAuth app for `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (Phase 3+, powers `/app/seo`'s Search Console + Analytics + YouTube connections) — see `../.env.example` for the exact steps. **Read the note in step 5 below before spending time on this** — it has a real timeline implication.
+5. Get a Buffer personal API key for `BUFFER_ACCESS_TOKEN` (Phase 4, powers Facebook/Instagram publishing) — **this is VMG's own Buffer account, not something each client sets up.** See `../.env.example` for exactly why (Buffer's current API doesn't support per-client OAuth) and the steps.
 
 Copy `../.env.example` to `../.env.local` and fill these in.
 
@@ -25,6 +26,8 @@ Copy `../.env.example` to `../.env.local` and fill these in.
 7. `migrations/0007_phase2_storage.sql` — Phase 2 storage buckets + policies
 8. `migrations/0008_phase3_schema.sql` — SEO audits, Google connections, report tables
 9. `migrations/0009_phase3_rls.sql` — Phase 3 row-level security policies
+10. `migrations/0010_phase4_schema.sql` — Buffer channel links, content publish-tracking columns, `youtube` service
+11. `migrations/0011_phase4_rls.sql` — Phase 4 row-level security policies
 
 (Equivalently, if you use the Supabase CLI: `supabase db push` after linking the project, with these files under `supabase/migrations/`.)
 
@@ -45,13 +48,20 @@ After registering two separate test client accounts, confirm each can only see t
 
 ## 5. Google OAuth verification timeline — read before you invest time in this
 
-The Search Console (`webmasters.readonly`) and Analytics (`analytics.readonly`) scopes are Google-classified as **sensitive**. Until your OAuth app passes Google's verification review, **only Google accounts you've explicitly added as Test Users** on the OAuth consent screen (Google Cloud Console → APIs & Services → OAuth consent screen → Test users) can complete a connection — anyone else sees an "app not verified" block. Verification can take anywhere from same-day to a few weeks depending on Google's review queue and whether they ask for more information. This is a real external dependency (master spec's own open item §37.13), not something to schedule around casually if you want real clients connecting Search Console/Analytics soon — start the verification process early, and use Test Users to develop/demo against in the meantime.
+The Search Console (`webmasters.readonly`), Analytics (`analytics.readonly`), and YouTube (`youtube.upload`, `youtube.readonly`) scopes are Google-classified as **sensitive**. Until your OAuth app passes Google's verification review, **only Google accounts you've explicitly added as Test Users** on the OAuth consent screen (Google Cloud Console → APIs & Services → OAuth consent screen → Test users) can complete a connection — anyone else sees an "app not verified" block. Verification can take anywhere from same-day to a few weeks depending on Google's review queue and whether they ask for more information. This is a real external dependency (master spec's own open item §37.13), not something to schedule around casually if you want real clients connecting soon — start the verification process early, and use Test Users to develop/demo against in the meantime.
+
+## 6. Buffer setup — this is VMG's account, not each client's
+
+1. If you don't already have one, create a Buffer account at [buffer.com](https://buffer.com) with a plan that supports API access.
+2. **Settings → API** → create a personal API key → `BUFFER_ACCESS_TOKEN`.
+3. For each client, add their Facebook Page and/or Instagram account as a **channel** on buffer.com (this step requires the client to authorize via their own Facebook login when you connect it — it happens on Buffer's site, not in Digital Command).
+4. In Digital Command, go to **Admin → Clients → [that client] → Publishing Channels** and link the channel you just added to the right org + platform. Content the client approves (or Autopilot auto-schedules) then publishes through it automatically.
 
 ## What's NOT included yet
 
 - Real KYC/Aadhaar/PAN verification API — only stores uploaded documents for a human (Super Admin) to review. Wiring a verification provider is an open item in the master spec (§37.1/§37.2).
 - Email receipts/notifications (spec §20) — deferred to a later phase; the audit log + in-app `notifications` table are the record for now.
 - Final legal-reviewed policy text — `0004_seed.sql` seeds clearly-labeled DRAFT placeholder copy.
-- Actual publishing to Facebook/Instagram/YouTube — the 7-Day Planner's realistic terminal state is `scheduled`, not `published` (Phase 4/Buffer).
 - Unattended/cron-based Autopilot — generation is on-demand (button click) until a hosting decision unlocks a serverless cron (spec §37.3 is still open).
 - Competitor tracking — deferred by explicit choice rather than starting a new paid SEO-data vendor relationship without sign-off (spec §36). Keyword tracking itself is real (Search Console-based).
+- Google Business Profile — needs a separate, stricter Google access-request approval (a 60+-day-old verified profile, a business website, formal review) that can't even be developed against without approval, unlike Search Console's Test-User workaround. Revisit once you have an eligible profile.

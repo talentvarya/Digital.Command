@@ -7,8 +7,12 @@ import { requireOrgMember } from "@/lib/auth/require-org-member";
 import { logAudit } from "@/lib/audit/log";
 import { generateCaption, findAvoidedWords, AiGenerationError } from "@/lib/ai/generate-content";
 import { REJECTIONS_BEFORE_SUGGESTION, MONTHLY_AI_GENERATION_SAFETY_CAP } from "@/lib/constants/content";
+import { dispatchToPublisher } from "@/lib/publishing/dispatch";
+import { getBufferPostStatus } from "@/lib/buffer/client";
+import { getValidAccessToken } from "@/lib/google/oauth";
+import { getYoutubeVideoStatus } from "@/lib/youtube/client";
 import type { ActionResult } from "@/app/register/actions";
-import type { BrandProfile, ContentControlMode, ContentPlatform } from "@/types/database";
+import type { BrandProfile, ContentControlMode, ContentItem, ContentPlatform } from "@/types/database";
 
 function refresh() {
   revalidatePath("/app/planner");
@@ -117,6 +121,7 @@ export async function generateAiContentAction(
   const heldForPolicy = controlMode === "autopilot" && avoidedWords.length > 0;
   const status = controlMode === "autopilot" && !heldForPolicy ? "scheduled" : "waiting_approval";
 
+  let savedItem: ContentItem;
   if (!itemId) {
     const { data: newItem, error } = await supabase
       .from("content_items")
@@ -132,12 +137,13 @@ export async function generateAiContentAction(
         rejection_count: attemptNumber,
         created_by: userId,
       })
-      .select("id")
+      .select("*")
       .single();
     if (error || !newItem) return { error: error?.message ?? "Could not create content item." };
     itemId = newItem.id;
+    savedItem = newItem;
   } else {
-    const { error } = await supabase
+    const { data: updatedItem, error } = await supabase
       .from("content_items")
       .update({
         caption: generated.caption,
@@ -147,8 +153,11 @@ export async function generateAiContentAction(
         rejection_count: attemptNumber,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", itemId);
-    if (error) return { error: error.message };
+      .eq("id", itemId)
+      .select("*")
+      .single();
+    if (error || !updatedItem) return { error: error?.message ?? "Could not update content item." };
+    savedItem = updatedItem;
   }
 
   const { data: versionRows } = await supabase
@@ -176,6 +185,10 @@ export async function generateAiContentAction(
       title: "AI content held for your review",
       body: `Autopilot generated a caption containing "${avoidedWords.join(", ")}" — it needs your approval instead of auto-scheduling.`,
     });
+  }
+
+  if (status === "scheduled") {
+    await dispatchToPublisher(supabase, savedItem);
   }
 
   await logAudit(supabase, {
@@ -259,11 +272,17 @@ export async function decideContentAction(_prevState: ActionResult, formData: Fo
 
   const nextStatus = decision === "approve" ? "scheduled" : decision === "reject" ? "rejected" : "skipped";
 
-  const { error } = await supabase
+  const { data: updatedItem, error } = await supabase
     .from("content_items")
     .update({ status: nextStatus, updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .select("*")
+    .single();
   if (error) return { error: error.message };
+
+  if (nextStatus === "scheduled" && updatedItem) {
+    await dispatchToPublisher(supabase, updatedItem);
+  }
 
   await logAudit(supabase, {
     orgId: member.orgId,
@@ -320,7 +339,7 @@ export async function createManualContentAction(
       control_mode: "approval_required",
       created_by: userId,
     })
-    .select("id")
+    .select("*")
     .single();
   if (error || !item) return { error: error?.message ?? "Could not create content item." };
 
@@ -337,6 +356,8 @@ export async function createManualContentAction(
       return { error: err instanceof Error ? err.message : "Media upload failed" };
     }
   }
+
+  await dispatchToPublisher(supabase, item);
 
   await logAudit(supabase, {
     orgId,
@@ -491,6 +512,55 @@ export async function copyContentItemAction(_prevState: ActionResult, formData: 
     await supabase
       .from("content_media")
       .insert(media.map((m) => ({ content_item_id: copy.id, org_id: member.orgId, media_type: m.media_type, storage_path: m.storage_path })));
+  }
+
+  refresh();
+  return {};
+}
+
+// ============================================================================
+// On-demand publish confirmation — no cron, same pattern as every other sync
+// in this app. Re-checks Buffer/YouTube for items already sent, and flips
+// status to 'published' (real, for the first time as of Phase 4) once
+// confirmed, or records the error.
+// ============================================================================
+export async function checkPublishStatusAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
+  const supabase = createClient();
+  const member = await requireOrgMember(supabase);
+  if ("error" in member) return member;
+
+  const id = formData.get("id") as string;
+  const { data: item } = await supabase.from("content_items").select("*").eq("id", id).single();
+  if (!item) return { error: "Content item not found." };
+  if (item.publish_status !== "sent") return { error: "Nothing to check yet — this item hasn't been sent out." };
+
+  try {
+    if ((item.platform === "facebook" || item.platform === "instagram") && item.buffer_post_id) {
+      const bufferStatus = await getBufferPostStatus(item.buffer_post_id);
+      if (bufferStatus.status === "sent") {
+        await supabase.from("content_items").update({ status: "published" }).eq("id", id);
+      } else if (bufferStatus.status === "error" || bufferStatus.error) {
+        await supabase
+          .from("content_items")
+          .update({ publish_status: "error", publish_error: bufferStatus.error ?? "Buffer reported an error." })
+          .eq("id", id);
+      }
+    } else if (item.platform === "youtube" && item.youtube_video_id) {
+      const accessToken = await getValidAccessToken(supabase, member.orgId, "youtube");
+      if (accessToken) {
+        const ytStatus = await getYoutubeVideoStatus(accessToken, item.youtube_video_id);
+        if (ytStatus.uploadStatus === "processed" && ytStatus.privacyStatus === "public") {
+          await supabase.from("content_items").update({ status: "published" }).eq("id", id);
+        } else if (ytStatus.uploadStatus === "failed" || ytStatus.uploadStatus === "rejected") {
+          await supabase
+            .from("content_items")
+            .update({ publish_status: "error", publish_error: `YouTube upload ${ytStatus.uploadStatus}.` })
+            .eq("id", id);
+        }
+      }
+    }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Status check failed" };
   }
 
   refresh();

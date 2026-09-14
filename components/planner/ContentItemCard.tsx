@@ -16,6 +16,7 @@ import {
   copyContentItemAction,
   addContentMediaAction,
   removeContentMediaAction,
+  checkPublishStatusAction,
 } from "@/app/app/planner/actions";
 import { PLATFORM_LABELS, REJECTIONS_BEFORE_SUGGESTION } from "@/lib/constants/content";
 import type { ContentItem, ContentMedia } from "@/types/database";
@@ -48,6 +49,34 @@ export function ContentItemCard({ item, media }: { item: ContentItem; media: Con
         {item.locked && <Lock className="h-3.5 w-3.5 text-ink-400" />}
         {item.scheduled_time && <span className="text-xs text-ink-400">{item.scheduled_time}</span>}
       </div>
+
+      {(item.status === "scheduled" || item.status === "published") && (
+        <div className="mb-2 flex items-center gap-2 text-xs">
+          {item.publish_status === "not_sent" && (
+            <span className="text-ink-400">Not sent yet — connect a publishing channel to send automatically.</span>
+          )}
+          {item.publish_status === "sent" && item.status !== "published" && (
+            <>
+              <span className="text-brand-600">Sent — awaiting confirmation</span>
+              <ActionForm action={checkPublishStatusAction}>
+                {(state) => (
+                  <>
+                    <input type="hidden" name="id" value={item.id} />
+                    <SubmitButton className="text-brand-600 underline" pendingLabel="Checking…">
+                      Check Status
+                    </SubmitButton>
+                    <FormError message={state.error} />
+                  </>
+                )}
+              </ActionForm>
+            </>
+          )}
+          {item.status === "published" && <span className="text-emerald-700">Published ✓</span>}
+          {item.publish_status === "error" && (
+            <span className="text-red-600">Publish error: {item.publish_error}</span>
+          )}
+        </div>
+      )}
 
       {editing ? (
         <ActionForm action={editContentAction} className="mb-3 space-y-2">

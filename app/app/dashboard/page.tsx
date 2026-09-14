@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Search, Link2, Share2, Youtube, MapPin, FileBarChart, Palette, ClipboardList } from "lucide-react";
+import { Search, Link2, MapPin, FileBarChart, Palette, ClipboardList } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ComingSoonCard } from "@/components/client/ComingSoonCard";
@@ -86,13 +86,11 @@ export default async function ClientDashboardPage() {
         <h2 className="mb-3 text-lg font-semibold text-ink-900">Modules</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <ModuleLinkCard icon={Palette} title="Brand Brain" subtitle="Voice, visuals & guardrails for AI content" href="/app/brand" />
-          <ModuleLinkCard icon={ClipboardList} title="7-Day Content Planner" subtitle="Generate, review & approve — includes your approval queue" href="/app/planner" />
+          <ModuleLinkCard icon={ClipboardList} title="7-Day Content Planner" subtitle="Generate, review, approve — publishes automatically via Buffer/YouTube once scheduled" href="/app/planner" />
           <ModuleLinkCard icon={Link2} title="Website & Channel Connections" subtitle="Add links, check they're reachable" href="/app/links" />
-          <ModuleLinkCard icon={Search} title="SEO" subtitle="Technical audit, Search Console & Analytics, keyword tracking" href="/app/seo" />
+          <ModuleLinkCard icon={Search} title="SEO" subtitle="Technical audit, Search Console & Analytics & YouTube connections, keyword tracking" href="/app/seo" />
           <ModuleLinkCard icon={FileBarChart} title="Reports" subtitle="Real data, AI-written summary — every 7 or 14 days" href="/app/reports" />
           <ComingSoonCard icon={Link2} title="Off-Page SEO" />
-          <ComingSoonCard icon={Share2} title="SMO Publishing (Facebook / Instagram)" />
-          <ComingSoonCard icon={Youtube} title="YouTube" />
           <ComingSoonCard icon={MapPin} title="Local SEO / Google Business Profile" />
         </div>
       </section>

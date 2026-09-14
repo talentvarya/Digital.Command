@@ -7,6 +7,7 @@ const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const SCOPES: Record<GoogleService, string> = {
   search_console: "https://www.googleapis.com/auth/webmasters.readonly",
   analytics: "https://www.googleapis.com/auth/analytics.readonly",
+  youtube: "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly",
 };
 
 function redirectUri(): string {

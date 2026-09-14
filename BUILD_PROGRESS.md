@@ -1,47 +1,49 @@
 # Digital Command — Build Progress
 
-Last updated: Phase 3 build.
+Last updated: Phase 4 build.
 
 ## Phase 1 — ✅ Complete
 ## Phase 2 — ✅ Complete
+## Phase 3 — ✅ Complete
 
-Full detail in this file's git history. Summarized: Phase 1 = branding, auth, multi-tenant DB+RLS, registration, verification, manual payment, Super Admin approval → activation. Phase 2 = Brand Brain, links, real Claude-powered 7-Day Planner with Autopilot/Approval Required, notifications.
+Full detail in this file's git history. Summarized: Phase 1 = branding, auth, multi-tenant DB+RLS, registration, verification, manual payment, Super Admin approval → activation. Phase 2 = Brand Brain, links, real Claude-powered 7-Day Planner with Autopilot/Approval Required, notifications. Phase 3 = real crawl-based SEO audit, Google Search Console/Analytics OAuth + keyword tracking, AI-narrated on-demand reports.
 
-## Phase 3
+## Phase 4
 
-### ✅ Completed (built and verified — lint/build clean, new routes confirmed to render/guard correctly in-browser)
+### ✅ Completed (built and verified — lint/build clean, new/changed routes confirmed to render/guard correctly in-browser)
 
-- **Real technical SEO crawl audit** (`/app/seo`) — robots.txt, sitemap.xml, on-page checks (title/meta description/canonical/viewport/h1/schema/image alt text), a ~10-link internal broken-link sample, weighted 0–100 score. No external account needed — works against any client's website immediately.
-- **Real Google OAuth** for Search Console and Analytics — full authorization-code flow with CSRF `state` protection, token exchange, and automatic refresh (`getValidAccessToken`)
-- **Real data sync** — "Sync Now" pulls actual Search Console query/page performance and actual GA4 sessions/users/conversions on demand, stored as timestamped snapshots (never overwritten, enabling trend comparisons)
-- **Keyword tracking** — real Search Console query data, period-over-period position deltas (▲/▼), no separate paid rank-tracker
-- **Reports** (`/app/reports`) — on-demand generation combining real SEO/Search-Console/Analytics/planner numbers with an AI-written narrative (`generateReportNarrative`) explicitly instructed to only use the given numbers, never invent a metric or promise guaranteed results
-- Dashboard: SEO and Reports are now real `ModuleLinkCard`s, not placeholders
+- **Real Buffer publishing** for Facebook/Instagram — verified Buffer's actual current API before building (not from potentially-stale training knowledge), found the spec's assumed per-client-OAuth model isn't available, corrected course with the user (two rounds of AskUserQuestion), and built against the real model: one shared VMG Buffer account, admin-linked channels per client (`buffer_channel_links`, `lib/buffer/client.ts`)
+- **Real YouTube publishing** — direct YouTube Data API v3, multipart upload, scheduled via `publishAt` (extends Phase 3's Google OAuth pattern with a third service)
+- **The publishing-adapter seam, finally real** — `lib/publishing/dispatch.ts`, wired into all three places a `content_item` reaches `status='scheduled'` (approve, Autopilot auto-schedule, client manual upload)
+- **`status='published'` is reachable for real** for the first time — an on-demand status check (`checkPublishStatusAction`) confirms against Buffer/YouTube and flips it, or records a `publish_error`
+- Admin "Publishing Channels" panel — links a client's org+platform to one of VMG's live Buffer channels (fetched from Buffer, not hardcoded)
+- Client-facing: planner cards show publish status + a "Check Status" action; `/app/seo` shows YouTube as a third connectable Google service plus a read-only "which channel is my Facebook/Instagram linked to" card
 - `npm run lint` — clean; `npm run build` — clean full production build + type check
-- Route guards re-verified in-browser: `/app/seo`, `/app/reports`, and both `/api/google/oauth/*` routes correctly redirect unauthenticated visitors
+- Route guards re-verified in-browser: `/app/seo`, `/app/planner`, `/admin/clients/[orgId]` all correctly redirect unauthenticated visitors
 
-### 🟡 Built, needs a live Supabase project + a real Google Cloud OAuth app to verify end-to-end
+### 🟡 Built, needs a live Supabase project + real Buffer/Google credentials + an actual linked channel to verify end-to-end
 
-- The full OAuth connect → property-pick → sync flow (code is complete and reviewed; needs real Google credentials and a live client site/property to exercise)
-- Report generation against real multi-period data (needs at least two snapshots/audits to show meaningful deltas)
+- The full dispatch → Buffer/YouTube → status-confirmation loop (code is complete and reviewed against Buffer's real GraphQL schema and YouTube's documented multipart-upload shape; needs real credentials, a real client channel connection, and a real scheduled post to exercise)
 
-### ⬜ Not started (explicitly out of Phase 3 scope, by design)
+### ⬜ Not started (explicitly out of Phase 4 scope, by design)
 
-- **Competitor tracking** — explicit user decision to defer rather than start a new paid Semrush/Ahrefs-style vendor relationship without sign-off first (spec §36)
-- Actual publishing (Phase 4/Buffer) — still unchanged from Phase 2's scope note
-- Off-Page SEO, YouTube management, Local SEO/GBP (Phase 4/5)
-- Automated/cron-scheduled report generation or SEO re-audits (on-demand only, same reasoning as Phase 2's Autopilot — no hosting decision made yet, spec §37.3)
-- A dedicated cost/rate cap on AI report-narrative generation (the planner's caption cap doesn't cover this new call path — flagged in `SECURITY_AND_RLS.md`)
+- **Google Business Profile** — GBP API access needs a separate, stricter approval (60+-day-old verified profile, business website, formal review, 0 QPM until approved — no Test-User workaround like Search Console). Revisit once the user has an eligible profile and wants to start that process.
+- Direct Facebook/Instagram Graph API as a fallback to Buffer — the adapter already isolates this behind a function boundary if it's ever needed later
+- Competitor tracking (unchanged from Phase 3 — explicit deferral)
+- Off-Page SEO, Local SEO/GBP (Phase 5+)
+- Resumable YouTube uploads for very large files (multipart is simpler and correct for now; upgrade path noted if serverless limits become a real problem)
+- AI cost cap on report generation or publish-dispatch (the planner caption cap doesn't cover these — flagged in `SECURITY_AND_RLS.md`)
 
 ### 🔴 Blocked
 
 - None currently.
 
-### ⚠️ Needs external setup / verification (owner action required — read `supabase/README.md` §5 first)
+### ⚠️ Needs external setup / verification (owner action required — read `supabase/README.md` §5–6 first)
 
-- **Create a Google Cloud OAuth app** (Search Console API + Analytics Data/Admin APIs enabled, OAuth consent screen with `webmasters.readonly` + `analytics.readonly` scopes, redirect URI set) and add `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`
-- **Add your own Google account as a Test User** on the OAuth consent screen to develop/demo against before Google's app verification completes — this is a real external timeline (days to weeks), not something skippable
-- Run migrations `0008`–`0009` against the same Supabase project as Phases 1–2
-- With real data: connect a real property, sync, generate a report, and sanity-check the AI narrative never states a number that isn't actually in `metrics_snapshot`
-- Decide whether/when to add an AI-cost cap to report generation before real client traffic
-- Decide on a competitor-tracking data provider whenever that becomes a priority (see `API_INTEGRATIONS.md`)
+- **Get a Buffer account with API access** and create a personal API key for `BUFFER_ACCESS_TOKEN` — this is VMG's own account/subscription, a real recurring cost, confirmed with the user before building
+- **Add each client's Facebook Page/Instagram account as a channel** on buffer.com (requires that client's Facebook login), then link it to the right org from the admin panel
+- **Extend the Phase 3 Google Cloud OAuth app** with the YouTube Data API v3 enabled + `youtube.upload`/`youtube.readonly` scopes added to the consent screen
+- Run migrations `0010`–`0011` against the same Supabase project as Phases 1–3
+- With real data: approve a piece of Facebook/Instagram content and confirm it actually lands in Buffer as a scheduled post; upload a YouTube video through the planner and confirm it appears (private, scheduled) on the connected channel; run the status check and confirm `published` gets set for real
+- Decide whether/when to start Google's Business Profile access-request process (needs a 60+-day-old profile first)
+- Decide on a competitor-tracking data provider whenever that becomes a priority (unchanged from Phase 3)

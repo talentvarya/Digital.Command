@@ -218,6 +218,10 @@ export interface ContentItem {
   control_mode: ContentControlMode;
   locked: boolean;
   rejection_count: number;
+  buffer_post_id: string | null;
+  youtube_video_id: string | null;
+  publish_status: "not_sent" | "sent" | "error";
+  publish_error: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -269,7 +273,7 @@ export interface AuditLog {
   created_at: string;
 }
 
-export type GoogleService = "search_console" | "analytics";
+export type GoogleService = "search_console" | "analytics" | "youtube";
 export type GoogleConnectionStatus = "connected" | "not_added" | "reconnect_required" | "error";
 
 // Safe-to-render shape — never includes access_token/refresh_token. See
@@ -351,4 +355,16 @@ export interface Report {
   metrics_snapshot: Record<string, unknown>;
   summary_text: string | null;
   next_plan_text: string | null;
+}
+
+export type BufferPlatform = "facebook" | "instagram";
+
+export interface BufferChannelLink {
+  id: string;
+  org_id: string;
+  platform: BufferPlatform;
+  buffer_channel_id: string;
+  buffer_channel_name: string | null;
+  linked_by: string | null;
+  linked_at: string;
 }

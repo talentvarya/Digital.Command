@@ -14,12 +14,14 @@ export function GoogleConnectionCard({
   service,
   connection,
   properties,
+  propertyLabel = "property",
   syncAction,
 }: {
   service: GoogleService;
   connection: GoogleConnectionPublic | null;
   properties: { id: string; label: string }[] | null;
-  syncAction: (prevState: ActionResult, formData: FormData) => Promise<ActionResult>;
+  propertyLabel?: string;
+  syncAction?: (prevState: ActionResult, formData: FormData) => Promise<ActionResult>;
 }) {
   const status = connection?.status ?? "not_added";
 
@@ -42,10 +44,10 @@ export function GoogleConnectionCard({
             <>
               <input type="hidden" name="service" value={service} />
               <div className="flex-1">
-                <label className="field-label">Choose a property</label>
+                <label className="field-label">Choose a {propertyLabel}</label>
                 <select name="property" className="field-input" defaultValue="" required>
                   <option value="" disabled>
-                    {properties && properties.length > 0 ? "Select…" : "No properties found on this Google account"}
+                    {properties && properties.length > 0 ? "Select…" : `No ${propertyLabel}s found on this Google account`}
                   </option>
                   {(properties ?? []).map((p) => (
                     <option key={p.id} value={p.id}>
@@ -68,16 +70,18 @@ export function GoogleConnectionCard({
             {connection.last_synced_at && ` · last synced ${new Date(connection.last_synced_at).toLocaleString()}`}
           </p>
           <div className="flex gap-2">
-            <ActionForm action={syncAction}>
-              {(state) => (
-                <>
-                  <SubmitButton className="btn-secondary px-3 py-1.5 text-sm" pendingLabel="Syncing…">
-                    <RefreshCw className="mr-1 inline h-3.5 w-3.5" /> Sync Now
-                  </SubmitButton>
-                  <FormError message={state.error} />
-                </>
-              )}
-            </ActionForm>
+            {syncAction && (
+              <ActionForm action={syncAction}>
+                {(state) => (
+                  <>
+                    <SubmitButton className="btn-secondary px-3 py-1.5 text-sm" pendingLabel="Syncing…">
+                      <RefreshCw className="mr-1 inline h-3.5 w-3.5" /> Sync Now
+                    </SubmitButton>
+                    <FormError message={state.error} />
+                  </>
+                )}
+              </ActionForm>
+            )}
             <ActionForm action={disconnectGoogleServiceAction}>
               {() => (
                 <>

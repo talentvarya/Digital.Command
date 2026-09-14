@@ -5,9 +5,11 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { VerificationReviewForm } from "@/components/admin/VerificationReviewForm";
 import { PaymentReviewForm } from "@/components/admin/PaymentReviewForm";
 import { ActivationPanel } from "@/components/admin/ActivationPanel";
+import { PublishingChannelsPanel } from "@/components/admin/PublishingChannelsPanel";
 import { BUSINESS_TYPE_LABELS, BUSINESS_TYPE_REQUIREMENTS } from "@/lib/constants/business";
 import { BILLING_TERM_LABELS, formatInr } from "@/lib/constants/plans";
 import { PLATFORM_LABELS } from "@/lib/constants/content";
+import { listBufferChannels, type BufferChannel } from "@/lib/buffer/client";
 import type { BusinessType } from "@/types/database";
 
 export default async function AdminClientDetailPage({ params }: { params: { orgId: string } }) {
@@ -55,6 +57,20 @@ export default async function AdminClientDetailPage({ params }: { params: { orgI
         .order("scheduled_date", { ascending: true })
         .limit(10)
     : { data: [] };
+
+  const { data: bufferChannelLinks } = org.status === "active"
+    ? await supabase.from("buffer_channel_links").select("*").eq("org_id", org.id)
+    : { data: [] };
+
+  let bufferChannels: BufferChannel[] = [];
+  let bufferError: string | null = null;
+  if (org.status === "active") {
+    try {
+      bufferChannels = await listBufferChannels();
+    } catch (err) {
+      bufferError = err instanceof Error ? err.message : "Could not reach Buffer";
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -242,6 +258,22 @@ export default async function AdminClientDetailPage({ params }: { params: { orgI
               <p className="text-sm text-ink-400">No subscription found.</p>
             )}
           </section>
+
+          {org.status === "active" && (
+            <section className="card">
+              <h2 className="mb-3 text-lg font-semibold text-ink-900">Publishing Channels</h2>
+              <p className="mb-3 text-xs text-ink-400">
+                Link this client&apos;s Facebook/Instagram to a channel in VMG&apos;s Buffer account so approved
+                planner content publishes automatically.
+              </p>
+              <PublishingChannelsPanel
+                orgId={org.id}
+                links={bufferChannelLinks ?? []}
+                bufferChannels={bufferChannels}
+                bufferError={bufferError}
+              />
+            </section>
+          )}
 
           <section className="card">
             <h2 className="mb-3 text-lg font-semibold text-ink-900">Client Actions</h2>

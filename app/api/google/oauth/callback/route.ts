@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { exchangeCodeForTokens } from "@/lib/google/oauth";
 import { requireOrgMember } from "@/lib/auth/require-org-member";
 import { logAudit } from "@/lib/audit/log";
-import type { GoogleService } from "@/types/database";
+import { isGoogleService } from "@/lib/constants/google";
 
 export async function GET(request: NextRequest) {
   const seoUrl = new URL("/app/seo", request.url);
@@ -25,8 +25,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(seoUrl);
   }
 
-  const service = state.split(".")[1] as GoogleService;
-  if (service !== "search_console" && service !== "analytics") {
+  const service = state.split(".")[1];
+  if (!isGoogleService(service)) {
     seoUrl.searchParams.set("google_error", "invalid_state");
     return NextResponse.redirect(seoUrl);
   }

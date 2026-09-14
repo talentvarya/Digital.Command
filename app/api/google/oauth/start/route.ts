@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { buildAuthUrl } from "@/lib/google/oauth";
-import type { GoogleService } from "@/types/database";
+import { isGoogleService } from "@/lib/constants/google";
 
 export async function GET(request: NextRequest) {
   const supabase = createClient();
@@ -12,8 +12,8 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(new URL("/login", request.url));
 
-  const service = request.nextUrl.searchParams.get("service") as GoogleService | null;
-  if (service !== "search_console" && service !== "analytics") {
+  const service = request.nextUrl.searchParams.get("service");
+  if (!isGoogleService(service)) {
     return NextResponse.json({ error: "Unknown service" }, { status: 400 });
   }
 

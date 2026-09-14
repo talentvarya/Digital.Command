@@ -36,13 +36,23 @@ Full SQL lives in `supabase/migrations/`. This is the human-readable map.
 
 | Table | Purpose | Key columns |
 |---|---|---|
-| `google_connections` | OAuth state for Search Console/Analytics | `service` (`search_console`\|`analytics`), `external_property`, `access_token`/`refresh_token` (server-only, never in a client-rendered query), `status`, `last_synced_at` — unique per `(org_id, service)` |
+| `google_connections` | OAuth state for Search Console/Analytics/YouTube | `service` (`search_console`\|`analytics`\|`youtube`, third value added Phase 4), `external_property`, `access_token`/`refresh_token` (server-only, never in a client-rendered query), `status`, `last_synced_at` — unique per `(org_id, service)` |
 | `seo_audits` | Technical crawl-audit results | `url`, `score` (0–100), `issues` (jsonb array of `{severity, type, message}`), `crawled_at` |
 | `search_console_snapshots` | One row per sync — also the keyword-tracking data source | `site_url`, `total_clicks`/`total_impressions`/`avg_ctr`/`avg_position`, `top_queries`/`top_pages` (jsonb) |
 | `analytics_snapshots` | One row per sync | `property_id`, `sessions`/`users`/`conversions`, `top_pages` (jsonb) |
 | `reports` | Generated on demand (spec §21) | `period_start`/`period_end`, `metrics_snapshot` (jsonb — the real numbers), `summary_text`/`next_plan_text` (AI-written, only from those numbers) |
 
 `seo_audits`, `search_console_snapshots`, `analytics_snapshots`, and `reports` are all **append-only by design** — each audit/sync/report creates a new row rather than updating an old one, which is what makes period-over-period trend comparisons possible. `google_connections` is the one Phase 3 table that does get updated in place (token refresh, property selection) and deleted (disconnect).
+
+## Tables/columns added in Phase 4
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `buffer_channel_links` | Admin-managed mapping from an org+platform to one of **VMG's own** Buffer channels (see `ARCHITECTURE.md`: Buffer's current API doesn't support per-client OAuth) | `org_id`, `platform` (`facebook`\|`instagram`), `buffer_channel_id`, `buffer_channel_name`, `linked_by` — unique per `(org_id, platform)` |
+
+`content_items` gained four columns: `buffer_post_id`, `youtube_video_id`, `publish_status` (`not_sent`\|`sent`\|`error`, default `not_sent`), `publish_error`. `status = 'published'` was already in the enum since Phase 2 but was unreachable until Phase 4's publish-dispatch + status-confirmation loop could actually get a `content_item` there for real.
+
+Unlike every Phase 1–3 connection table (client-managed via `is_org_member`), `buffer_channel_links` is **admin-managed** — clients get read-only visibility, only Super Admin can link/unlink a channel. This isn't an oversight; it follows directly from the Buffer account itself being VMG's, not the client's (see `ARCHITECTURE.md` and `SECURITY_AND_RLS.md`).
 
 ## Triggers / functions
 
@@ -61,4 +71,4 @@ All four use the path convention `{org_id}/{uuid}-{filename}` so a single `stora
 
 ## Tables from the spec's full list (§25) NOT yet created
 
-`websites`, `social_connections` (OAuth-authenticated *publishing* connections for Phase 4 — a different shape than `google_connections`, which is read-only reporting access), `content_approvals` (folded into `content_items.status` + `content_versions` history rather than a separate table), `automation_jobs`, `seo_metrics`/`keyword_metrics` (folded into `seo_audits`/`search_console_snapshots` rather than finer-grained per-day tables — revisit if trend reporting needs daily granularity), `backlink_opportunities`, `outreach_jobs`, `report_metrics` (folded into `reports.metrics_snapshot` jsonb), `api_health_events`, `support_tickets`, `generated_assets` — these belong to Phase 4+ and are deliberately absent so the schema doesn't imply functionality that doesn't exist yet.
+`websites`, `social_connections` (spec's generic name for publishing connections — turned out to need two differently-shaped real tables, `google_connections` and `buffer_channel_links`, rather than one), `content_approvals` (folded into `content_items.status` + `content_versions` history rather than a separate table), `automation_jobs`, `seo_metrics`/`keyword_metrics` (folded into `seo_audits`/`search_console_snapshots` rather than finer-grained per-day tables — revisit if trend reporting needs daily granularity), `backlink_opportunities`, `outreach_jobs`, `report_metrics` (folded into `reports.metrics_snapshot` jsonb), `api_health_events`, `support_tickets`, `generated_assets` — these belong to Phase 5+ and are deliberately absent so the schema doesn't imply functionality that doesn't exist yet.

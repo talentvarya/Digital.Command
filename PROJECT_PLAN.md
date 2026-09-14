@@ -8,8 +8,8 @@ Source of truth: `Digital_Command_Claude_Master_Build_Spec.md` (owner-supplied).
 |---|---|---|
 | 1 | Branding shell, Supabase Auth, multi-tenant DB + RLS, Super Admin, client registration, policy acceptance, business verification, manual payment verification, client activation | ✅ Built |
 | 2 | Client dashboard, Brand Brain, website/link setup, 7-day planner, Autopilot/Approval Required, content versions, notifications | ✅ Built |
-| **3** | SEO audit, Search Console, Analytics, reporting, graphs, keyword/competitor tracking | **This build** |
-| 4 | Buffer integration, Facebook/Instagram publishing, YouTube, GBP/Local SEO | Not started |
+| 3 | SEO audit, Search Console, Analytics, reporting, graphs, keyword/competitor tracking | ✅ Built |
+| **4** | Buffer integration, Facebook/Instagram publishing, YouTube, GBP/Local SEO | **This build — GBP deferred, see below** |
 | 5 | Off-page opportunity engine, outreach, digital PR, backlink verification | Not started |
 | 6 | Paid campaign preparation, manual approval, budget/date controls, ad reporting | Not started |
 | 7 | Client AI Assistant, conversion tracking, cost dashboard, backup/rollback, API health center, emergency freeze, offboarding, sandbox | Not started |
@@ -59,3 +59,21 @@ Source of truth: `Digital_Command_Claude_Master_Build_Spec.md` (owner-supplied).
 - Competitor tracking is not wired up — explicit user decision to defer rather than start a new paid Semrush/Ahrefs-style vendor relationship without sign-off (spec §36).
 - Google Search Console/Analytics connections only work for Google accounts added as **Test Users** on the project's OAuth consent screen until the user completes Google's app verification process (spec open item §37.13) — a real, potentially days-to-weeks external dependency, not something this build can shortcut.
 - No automatic/scheduled report generation — same on-demand, no-cron pattern as Phase 2's AI generation, for the same hosting-decision reason (spec §37.3).
+
+## Phase 4 exit criteria
+
+- Facebook/Instagram content that reaches `status='scheduled'` in the planner (client approval or Autopilot) is really sent to Buffer as a scheduled post, using VMG's own Buffer account/channels (see "The Buffer reality" below).
+- YouTube content similarly triggers a real multipart upload to the client's own connected YouTube channel, scheduled via `publishAt`.
+- An on-demand status check flips `content_items.status` to `published` for real once Buffer/YouTube confirm, or records a `publish_error` the client can see.
+- Admin can link a client's org+platform to one of VMG's Buffer channels from the client detail page.
+- `npm run lint` and `npm run build` stay clean.
+
+## The Buffer reality (read before assuming "Buffer integration" means per-client OAuth)
+
+I researched Buffer's actual current API before building this (training data on it was stale) and found the premise the master spec's §13 seems to assume — clients connecting their own Buffer accounts — isn't available: Buffer's old third-party-OAuth REST API is closed to new developer registrations, and its new GraphQL API's public beta only supports a personal API key tied to **one** Buffer login. Confirmed with the user (AskUserQuestion, twice — the second time specifically to correct my own first answer once I'd verified the facts) to proceed under the actual available model: **one shared VMG Buffer account/subscription**, with each client's channel added to it individually (on buffer.com, using the client's own Facebook login), then linked to the right org from Digital Command's admin panel. See `ARCHITECTURE.md` and `SECURITY_AND_RLS.md` for the full mechanics and why `buffer_channel_links` is admin-owned rather than client-owned like every other Phase 1–3 connection table.
+
+## Explicit non-goals for Phase 4
+
+- **Google Business Profile is not started.** GBP API access requires a separate formal access-request form, a Business Profile that's been verified and **active for 60+ days**, a business website, and a Google review (days to weeks, rejections common) — quota is 0 until approved, so there's no way to even test against it the way Search Console's Test-User model allowed. Revisit once the user has an eligible, 60+-day-old GBP and wants to start that process.
+- No resumable-upload protocol for YouTube — multipart (single request) is simpler and correct for this server-to-server relay; very large videos may hit serverless payload/execution limits depending on the still-open hosting decision (spec §37.3).
+- No AI cost cap on report generation (flagged in Phase 3, still open) or on publishing dispatch — worth adding before real client traffic.
