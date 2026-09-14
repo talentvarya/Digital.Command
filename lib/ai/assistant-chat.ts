@@ -65,6 +65,12 @@ export async function runAssistantChat(
         tool_choice: { type: "auto", disable_parallel_tool_use: true },
       });
     } catch (error) {
+      if (error instanceof Anthropic.AuthenticationError) {
+        throw new AiGenerationError("The assistant is not configured — invalid ANTHROPIC_API_KEY.");
+      }
+      if (error instanceof Anthropic.RateLimitError) {
+        throw new AiGenerationError("The assistant is rate-limited right now — please try again shortly.");
+      }
       if (error instanceof Anthropic.APIError) throw new AiGenerationError(`Assistant failed: ${error.message}`);
       throw error;
     }
