@@ -223,12 +223,18 @@ export async function executeAssistantTool(name: string, input: Record<string, u
 
     let generated;
     try {
-      generated = await generateCaption({
-        platform: found.item.platform as ContentPlatform,
-        brandProfile: (brand as BrandProfile | null) ?? null,
-        previousCaptions: (versions ?? []).map((v) => v.caption).filter(Boolean) as string[],
-        clientSuggestion,
-      });
+      // Pinned to Anthropic regardless of AI_PROVIDER: the assistant's tool-calling
+      // loop is Claude-specific (see runAssistantChat), so a single turn must not
+      // blend a Kimi-generated caption's usage into an Anthropic-priced log row.
+      generated = await generateCaption(
+        {
+          platform: found.item.platform as ContentPlatform,
+          brandProfile: (brand as BrandProfile | null) ?? null,
+          previousCaptions: (versions ?? []).map((v) => v.caption).filter(Boolean) as string[],
+          clientSuggestion,
+        },
+        { provider: "anthropic" }
+      );
     } catch (err) {
       return { content: err instanceof AiGenerationError ? err.message : "Regeneration failed.", isError: true };
     }

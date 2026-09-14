@@ -1,10 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { estimateHaikuCostUsd } from "@/lib/constants/ai-pricing";
-import type { AiUsageFeature } from "@/types/database";
+import { estimateAiCostUsd } from "@/lib/constants/ai-pricing";
+import type { AiProvider, AiUsageFeature } from "@/types/database";
 
 export interface AiUsage {
   inputTokens: number;
   outputTokens: number;
+  provider: AiProvider;
 }
 
 // Mirrors logAudit's own shape — swallow/console-log failures, never let a
@@ -18,9 +19,10 @@ export async function logAiUsage(
   const { error } = await supabase.from("ai_usage_events").insert({
     org_id: params.orgId,
     feature: params.feature,
+    provider: params.usage.provider,
     input_tokens: params.usage.inputTokens,
     output_tokens: params.usage.outputTokens,
-    estimated_cost_usd: estimateHaikuCostUsd(params.usage.inputTokens, params.usage.outputTokens),
+    estimated_cost_usd: estimateAiCostUsd(params.usage.provider, params.usage.inputTokens, params.usage.outputTokens),
   });
 
   if (error) {

@@ -1,5 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicClient, HAIKU_MODEL, AiGenerationError } from "@/lib/ai/client";
+import { generateText } from "@/lib/ai/provider";
 import type { AiUsage } from "@/lib/ai/log-usage";
 import type { BrandProfile } from "@/types/database";
 import type { PageContent } from "@/lib/web/fetch-page";
@@ -20,10 +19,6 @@ export async function assessOpportunity(params: {
   page: PageContent;
   brandProfile: BrandProfile | null;
 }): Promise<OpportunityAssessment> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new AiGenerationError("AI assessment is not configured — ANTHROPIC_API_KEY is missing.");
-  }
-
   const lines = [
     `Page URL: ${params.page.url}`,
     `Page title: ${params.page.title || "(none)"}`,
@@ -36,30 +31,15 @@ export async function assessOpportunity(params: {
     lines.push(`Client's products/services: ${params.brandProfile.products_services}`);
   }
 
-  try {
-    const response = await getAnthropicClient().messages.create({
-      model: HAIKU_MODEL,
-      max_tokens: 512,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: lines.join("\n") }],
-    });
+  const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 512 });
 
-    const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
-    if (!textBlock) throw new AiGenerationError("The AI response did not contain any text.");
-
-    const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
-    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : textBlock.text);
-    const spamRisk = ["low", "medium", "high"].includes(parsed.spamRisk) ? parsed.spamRisk : "medium";
-    return {
-      relevanceScore: Math.max(0, Math.min(100, Math.round(Number(parsed.relevanceScore) || 0))),
-      qualityNotes: typeof parsed.qualityNotes === "string" ? parsed.qualityNotes : "No assessment notes returned.",
-      spamRisk,
-      usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens },
-    };
-  } catch (error) {
-    if (error instanceof Anthropic.APIError) {
-      throw new AiGenerationError(`AI assessment failed: ${error.message}`);
-    }
-    throw error;
-  }
+  const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  const spamRisk = ["low", "medium", "high"].includes(parsed.spamRisk) ? parsed.spamRisk : "medium";
+  return {
+    relevanceScore: Math.max(0, Math.min(100, Math.round(Number(parsed.relevanceScore) || 0))),
+    qualityNotes: typeof parsed.qualityNotes === "string" ? parsed.qualityNotes : "No assessment notes returned.",
+    spamRisk,
+    usage: result.usage,
+  };
 }

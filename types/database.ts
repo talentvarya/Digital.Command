@@ -504,10 +504,16 @@ export type AiUsageFeature =
   | "campaign_brief"
   | "assistant_chat";
 
+// The AI Assistant (assistant-chat.ts) always uses "anthropic" regardless of
+// AI_PROVIDER — see lib/ai/provider.ts and assistant-tools.ts's pinned
+// regenerate_content call for why.
+export type AiProvider = "anthropic" | "kimi";
+
 export interface AiUsageEvent {
   id: string;
   org_id: string;
   feature: AiUsageFeature;
+  provider: AiProvider;
   input_tokens: number;
   output_tokens: number;
   estimated_cost_usd: number;

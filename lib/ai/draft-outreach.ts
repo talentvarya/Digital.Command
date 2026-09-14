@@ -1,5 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicClient, HAIKU_MODEL, AiGenerationError } from "@/lib/ai/client";
+import { generateText } from "@/lib/ai/provider";
 import type { AiUsage } from "@/lib/ai/log-usage";
 import type { BrandProfile, OffPageOpportunity } from "@/types/database";
 import type { PageContent } from "@/lib/web/fetch-page";
@@ -24,10 +23,6 @@ export async function draftOutreachMessage(params: {
   brandProfile: BrandProfile | null;
   isFollowUp: boolean;
 }): Promise<DraftedOutreach> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new AiGenerationError("AI generation is not configured — ANTHROPIC_API_KEY is missing.");
-  }
-
   const lines = [
     params.isFollowUp
       ? "Write a brief, polite follow-up to a previous outreach email that got no response yet."
@@ -46,28 +41,13 @@ export async function draftOutreachMessage(params: {
     lines.push(`Client's preferred tone: ${params.brandProfile.preferred_tone}`);
   }
 
-  try {
-    const response = await getAnthropicClient().messages.create({
-      model: HAIKU_MODEL,
-      max_tokens: 512,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: lines.join("\n") }],
-    });
+  const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 512 });
 
-    const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
-    if (!textBlock) throw new AiGenerationError("The AI response did not contain any text.");
-
-    const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
-    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : textBlock.text);
-    return {
-      subject: typeof parsed.subject === "string" ? parsed.subject : "Quick note",
-      body: typeof parsed.body === "string" ? parsed.body : textBlock.text,
-      usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens },
-    };
-  } catch (error) {
-    if (error instanceof Anthropic.APIError) {
-      throw new AiGenerationError(`AI generation failed: ${error.message}`);
-    }
-    throw error;
-  }
+  const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  return {
+    subject: typeof parsed.subject === "string" ? parsed.subject : "Quick note",
+    body: typeof parsed.body === "string" ? parsed.body : result.text,
+    usage: result.usage,
+  };
 }

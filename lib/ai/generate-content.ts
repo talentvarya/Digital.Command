@@ -1,7 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicClient, HAIKU_MODEL, AiGenerationError } from "@/lib/ai/client";
+import { generateText } from "@/lib/ai/provider";
 import type { AiUsage } from "@/lib/ai/log-usage";
-import type { BrandProfile, ContentPlatform } from "@/types/database";
+import type { AiProvider, BrandProfile, ContentPlatform } from "@/types/database";
 
 export { AiGenerationError } from "@/lib/ai/client";
 
@@ -79,40 +78,18 @@ function parseResponse(text: string): Omit<GeneratedCaption, "usage"> {
   return { caption: text.trim(), hashtags: [] };
 }
 
-export async function generateCaption(params: GenerateCaptionParams): Promise<GeneratedCaption> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new AiGenerationError("AI generation is not configured — ANTHROPIC_API_KEY is missing.");
-  }
+// opts?.provider is only ever passed by assistant-tools.ts's regenerate_content
+// tool, which pins "anthropic" regardless of AI_PROVIDER — see provider.ts.
+export async function generateCaption(
+  params: GenerateCaptionParams,
+  opts?: { provider?: AiProvider }
+): Promise<GeneratedCaption> {
+  const result = await generateText(
+    { system: buildSystemPrompt(params.brandProfile), user: buildUserPrompt(params), maxTokens: 1024 },
+    opts
+  );
 
-  try {
-    const response = await getAnthropicClient().messages.create({
-      model: HAIKU_MODEL,
-      max_tokens: 1024,
-      system: buildSystemPrompt(params.brandProfile),
-      messages: [{ role: "user", content: buildUserPrompt(params) }],
-    });
-
-    const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
-    if (!textBlock) {
-      throw new AiGenerationError("The AI response did not contain any text.");
-    }
-
-    return {
-      ...parseResponse(textBlock.text),
-      usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens },
-    };
-  } catch (error) {
-    if (error instanceof Anthropic.AuthenticationError) {
-      throw new AiGenerationError("AI generation failed: invalid ANTHROPIC_API_KEY.");
-    }
-    if (error instanceof Anthropic.RateLimitError) {
-      throw new AiGenerationError("AI generation is rate-limited right now — please try again shortly.");
-    }
-    if (error instanceof Anthropic.APIError) {
-      throw new AiGenerationError(`AI generation failed: ${error.message}`);
-    }
-    throw error;
-  }
+  return { ...parseResponse(result.text), usage: result.usage };
 }
 
 // Real (not decorative) policy check per spec §10's "Quality/Policy check" —

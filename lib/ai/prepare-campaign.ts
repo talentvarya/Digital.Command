@@ -1,5 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicClient, HAIKU_MODEL, AiGenerationError } from "@/lib/ai/client";
+import { generateText } from "@/lib/ai/provider";
 import type { AiUsage } from "@/lib/ai/log-usage";
 import type { AdPlatform, BrandProfile } from "@/types/database";
 
@@ -28,10 +27,6 @@ export async function prepareCampaignDraft(params: {
   goalDescription: string;
   brandProfile: BrandProfile | null;
 }): Promise<CampaignDraft> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new AiGenerationError("AI generation is not configured — ANTHROPIC_API_KEY is missing.");
-  }
-
   const lines = [
     `Platform: ${params.platform.replace(/_/g, " ")}`,
     `Objective: ${params.objective}`,
@@ -43,30 +38,15 @@ export async function prepareCampaignDraft(params: {
   if (params.brandProfile?.locations) lines.push(`Location(s): ${params.brandProfile.locations}`);
   if (params.brandProfile?.preferred_tone) lines.push(`Preferred tone: ${params.brandProfile.preferred_tone}`);
 
-  try {
-    const response = await getAnthropicClient().messages.create({
-      model: HAIKU_MODEL,
-      max_tokens: 768,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: lines.join("\n") }],
-    });
+  const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 768 });
 
-    const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
-    if (!textBlock) throw new AiGenerationError("The AI response did not contain any text.");
-
-    const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
-    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : textBlock.text);
-    return {
-      audienceDescription: typeof parsed.audienceDescription === "string" ? parsed.audienceDescription : "",
-      keywords: Array.isArray(parsed.keywords) ? parsed.keywords.filter((k: unknown) => typeof k === "string") : [],
-      creativeBrief: typeof parsed.creativeBrief === "string" ? parsed.creativeBrief : "",
-      suggestedBudgetNotes: typeof parsed.suggestedBudgetNotes === "string" ? parsed.suggestedBudgetNotes : "",
-      usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens },
-    };
-  } catch (error) {
-    if (error instanceof Anthropic.APIError) {
-      throw new AiGenerationError(`AI generation failed: ${error.message}`);
-    }
-    throw error;
-  }
+  const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  return {
+    audienceDescription: typeof parsed.audienceDescription === "string" ? parsed.audienceDescription : "",
+    keywords: Array.isArray(parsed.keywords) ? parsed.keywords.filter((k: unknown) => typeof k === "string") : [],
+    creativeBrief: typeof parsed.creativeBrief === "string" ? parsed.creativeBrief : "",
+    suggestedBudgetNotes: typeof parsed.suggestedBudgetNotes === "string" ? parsed.suggestedBudgetNotes : "",
+    usage: result.usage,
+  };
 }

@@ -43,7 +43,13 @@ export async function runAssistantChat(
   let outputTokens = 0;
 
   const finish = async (reply: string) => {
-    await logAiUsage(supabase, { orgId: ctx.orgId, feature: "assistant_chat", usage: { inputTokens, outputTokens } });
+    await logAiUsage(supabase, {
+      orgId: ctx.orgId,
+      feature: "assistant_chat",
+      // Always "anthropic": the assistant's tool-calling loop below is Claude-specific
+      // (Anthropic.TextBlock/ToolUseBlock), not portable to Kimi's tool-call shape.
+      usage: { inputTokens, outputTokens, provider: "anthropic" },
+    });
     return { reply };
   };
 

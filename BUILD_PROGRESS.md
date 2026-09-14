@@ -1,6 +1,6 @@
 # Digital Command — Build Progress
 
-Last updated: Phase 7 build — the final phase in the master spec (§35).
+Last updated: post-Phase 7 — live database verification + Kimi as a second AI provider.
 
 ## Phase 1 — ✅ Complete
 ## Phase 2 — ✅ Complete
@@ -50,6 +50,30 @@ Full detail in this file's git history. Summarized: Phase 1 = branding, auth, mu
 - No new environment variable or vendor account needed — every Phase 7 feature reuses existing credentials (`ANTHROPIC_API_KEY` for the assistant and cost tracking, the existing Google OAuth app for token revocation)
 - With real data: have a conversation with the AI Assistant and sanity-check its tool choices against your own judgment; create a tracked WhatsApp link and click it yourself to confirm the redirect + click-logging works; toggle Master STOP and confirm a generation attempt is actually blocked; practice an offboarding pass on a real (or sandbox-marked) test org before ever using it on a paying client
 - Re-verify the Haiku pricing constants (`lib/constants/ai-pricing.ts`) and the USD→INR rate (`lib/constants/currency.ts`) periodically — both are real figures as of this build, not live-fetched
+
+## Post-Phase 7 — live database verification + Kimi as a second AI provider
+
+### ✅ Completed (built and verified)
+
+- **First-ever live database verification pass** — connected to a real Supabase project, ran all 19 migrations against it (not just checked they parse), and genuinely exercised registration, Super Admin approval/activation, TOTP MFA enrollment, Master STOP, Emergency Freeze, conversion tracking's public redirect endpoint, and the SEO audit against a real external site, rather than relying on `lint`/`build`/route-guard checks alone
+- **Two real bugs found and fixed via this live testing** (in addition to the two already listed under Phase 7 above): `organizations_select`'s RLS policy blocked every registration from ever completing against a real database, since Phase 1 — no `organization_members` row exists at the exact moment a new org is inserted, so `INSERT ... RETURNING` had nothing to return (`0018_fix_org_select_on_create.sql`); `runSeoAudit()` checked `robots.txt`/`sitemap.xml` against the entered URL's *path* instead of its origin root, producing false "not found" results for any client URL that included a path (found by auditing a real external site). Full diagnosis in `SECURITY_AND_RLS.md` and `PROJECT_PLAN.md`
+- **Kimi (Moonshot AI) added as a second, switchable AI provider alongside Claude** — user's explicit request, confirmed twice that this is additive, not a replacement. `lib/ai/provider.ts` dispatcher + `lib/ai/providers/{anthropic,kimi}.ts`; all 4 simple-generation files (`generate-content.ts`, `generate-report.ts`, `assess-opportunity.ts`, `draft-outreach.ts`, `prepare-campaign.ts`) refactored onto it; the AI Assistant's `regenerate_content` tool explicitly pinned to `"anthropic"` (the assistant's tool-calling loop is Claude-specific, not portable to Kimi); `ai_usage_events.provider` column added (`0019_ai_provider_tracking.sql`) and applied to the live database; real Kimi pricing wired into the Cost Dashboard. Full reasoning in `ARCHITECTURE.md`'s "AI Provider Abstraction" section
+- `npm run lint` / `npm run build` — clean after the full refactor
+- **Both provider paths verified live, structurally** — with the real `ANTHROPIC_API_KEY` and `MOONSHOT_API_KEY` both still local placeholders, a live round-trip against each provider's real endpoint (`api.anthropic.com`, `api.moonshot.ai`) was confirmed to reach the network, get a genuine 401 back, and surface it as the exact expected `AiGenerationError` (`"AI generation failed: invalid ANTHROPIC_API_KEY."` / `"Kimi generation failed: invalid MOONSHOT_API_KEY."`) — proving the dispatcher, request-building, and error-classification code all work correctly. What's *not* verified is a successful generation, which needs a real key
+
+### 🟡 Built, needs a real MOONSHOT_API_KEY to verify end-to-end
+
+- A genuinely successful Kimi generation (does the call succeed, does the existing JSON-extraction regex handle `kimi-k2.6`'s actual output formatting the same way it handles Claude's) — code-complete and structurally verified per above, but not yet exercised with real output
+
+### ⬜ Not started / unresolved
+
+- **Two-tenant data isolation testing** — blocked mid-session by Supabase's default shared-email-sending rate limit after several signup/confirmation-email tests; explicitly not worked around by directly manipulating `auth.users` (this was attempted once for the Super Admin path specifically and correctly blocked by the system's own safety controls) — needs either the rate limit to clear, or the owner to run this test themselves, or explicit authorization for an alternative approach
+
+### ⚠️ Needs external setup / verification (owner action required)
+
+- Paste a real `MOONSHOT_API_KEY` to complete Kimi verification end-to-end
+- Re-verify `kimi-k2.6`'s pricing (`lib/constants/ai-pricing.ts`) periodically, same discipline already applied to the Haiku constants
+- Two-tenant isolation testing (see above) — needs the rate limit to clear or manual verification
 
 ## What's next
 

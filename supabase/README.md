@@ -8,6 +8,7 @@
    - `anon public` key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` key → `SUPABASE_SERVICE_ROLE_KEY` (server-only, keep secret)
 3. Get an Anthropic API key at [console.anthropic.com](https://console.anthropic.com) → `ANTHROPIC_API_KEY` (server-only). Powers the 7-Day Planner's AI caption generation and (Phase 3) report narratives.
+   - Optional (post-Phase 7): get a Moonshot AI (Kimi) key at [platform.kimi.ai](https://platform.kimi.ai) → `MOONSHOT_API_KEY`, and set `AI_PROVIDER=kimi` to switch generation over to it. Claude stays the default when either is left unset — see `../ARCHITECTURE.md`'s "AI Provider Abstraction" section.
 4. Set up a Google Cloud OAuth app for `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (Phase 3+, powers `/app/seo`'s Search Console + Analytics + YouTube connections) — see `../.env.example` for the exact steps. **Read the note in step 5 below before spending time on this** — it has a real timeline implication.
 5. Get a Buffer personal API key for `BUFFER_ACCESS_TOKEN` (Phase 4, powers Facebook/Instagram publishing) — **this is VMG's own Buffer account, not something each client sets up.** See `../.env.example` for exactly why (Buffer's current API doesn't support per-client OAuth) and the steps.
 6. Set up a Google Programmable Search Engine for `GOOGLE_CUSTOM_SEARCH_API_KEY`/`GOOGLE_CUSTOM_SEARCH_ENGINE_ID` (Phase 5, powers `/app/outreach`'s brand-mention search) — see `../.env.example` for the steps. Free tier, no vendor sign-off needed.
@@ -38,6 +39,7 @@ Copy `../.env.example` to `../.env.local` and fill these in.
 16. `migrations/0016_phase7_schema.sql` — AI usage tracking, conversion tracking, system settings (Emergency Freeze), offboarded/sandbox markers, two Phase-1/2 bug fixes (see §7 below)
 17. `migrations/0017_phase7_rls.sql` — Phase 7 row-level security policies, including the `client_settings` owner-update fix
 18. `migrations/0018_fix_org_select_on_create.sql` — fixes a bug found during the first live-database verification pass that blocked registration from ever completing (see `PROJECT_PLAN.md`'s "Live database verification" section and `SECURITY_AND_RLS.md`)
+19. `migrations/0019_ai_provider_tracking.sql` — adds `ai_usage_events.provider` (`anthropic`|`kimi`), post-Phase 7, for Kimi as a second AI provider
 
 (Equivalently, if you use the Supabase CLI: `supabase db push` after linking the project, with these files under `supabase/migrations/`.)
 

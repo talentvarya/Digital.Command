@@ -1,5 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicClient, HAIKU_MODEL, AiGenerationError } from "@/lib/ai/client";
+import { generateText } from "@/lib/ai/provider";
 import type { AiUsage } from "@/lib/ai/log-usage";
 
 export interface ReportMetricsInput {
@@ -78,43 +77,17 @@ function describeMetrics(input: ReportMetricsInput): string {
 }
 
 export async function generateReportNarrative(input: ReportMetricsInput): Promise<GeneratedReportNarrative> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new AiGenerationError("AI generation is not configured — ANTHROPIC_API_KEY is missing.");
-  }
+  const result = await generateText({ system: SYSTEM_PROMPT, user: describeMetrics(input), maxTokens: 1024 });
 
   try {
-    const response = await getAnthropicClient().messages.create({
-      model: HAIKU_MODEL,
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: describeMetrics(input) }],
-    });
-
-    const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
-    if (!textBlock) throw new AiGenerationError("The AI response did not contain any text.");
-
-    const usage: AiUsage = { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens };
-    try {
-      const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
-      const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : textBlock.text);
-      return {
-        summary: typeof parsed.summary === "string" ? parsed.summary : textBlock.text,
-        nextPlan: typeof parsed.nextPlan === "string" ? parsed.nextPlan : "",
-        usage,
-      };
-    } catch {
-      return { summary: textBlock.text.trim(), nextPlan: "", usage };
-    }
-  } catch (error) {
-    if (error instanceof Anthropic.AuthenticationError) {
-      throw new AiGenerationError("AI generation failed: invalid ANTHROPIC_API_KEY.");
-    }
-    if (error instanceof Anthropic.RateLimitError) {
-      throw new AiGenerationError("AI generation is rate-limited right now — please try again shortly.");
-    }
-    if (error instanceof Anthropic.APIError) {
-      throw new AiGenerationError(`AI generation failed: ${error.message}`);
-    }
-    throw error;
+    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+    return {
+      summary: typeof parsed.summary === "string" ? parsed.summary : result.text,
+      nextPlan: typeof parsed.nextPlan === "string" ? parsed.nextPlan : "",
+      usage: result.usage,
+    };
+  } catch {
+    return { summary: result.text.trim(), nextPlan: "", usage: result.usage };
   }
 }
