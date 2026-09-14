@@ -368,3 +368,60 @@ export interface BufferChannelLink {
   linked_by: string | null;
   linked_at: string;
 }
+
+export type OpportunityType = "guest_contribution" | "broken_link" | "unlinked_mention" | "other";
+export type OpportunityStatus =
+  | "new"
+  | "assessed"
+  | "contacted"
+  | "awaiting_response"
+  | "link_acquired"
+  | "declined"
+  | "lost";
+export type SpamRisk = "low" | "medium" | "high";
+
+export interface OffPageOpportunity {
+  id: string;
+  org_id: string;
+  url: string;
+  opportunity_type: OpportunityType;
+  status: OpportunityStatus;
+  relevance_score: number | null;
+  quality_notes: string | null;
+  spam_risk: SpamRisk | null;
+  contact_email: string | null;
+  contact_name: string | null;
+  link_verified: boolean;
+  link_last_checked_at: string | null;
+  link_first_confirmed_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OutreachMessage {
+  id: string;
+  opportunity_id: string;
+  org_id: string;
+  subject: string | null;
+  body: string;
+  status: "draft" | "sent";
+  sent_at: string | null;
+  follow_up_due_at: string | null;
+  generated_by: "ai" | "admin" | "client";
+  created_at: string;
+}
+
+export interface BrandMentionResult {
+  title: string;
+  link: string;
+  snippet: string;
+}
+
+export interface BrandMentionSearch {
+  id: string;
+  org_id: string;
+  query: string;
+  searched_at: string;
+  results: BrandMentionResult[];
+}

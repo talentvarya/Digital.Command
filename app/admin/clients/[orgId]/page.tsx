@@ -72,6 +72,14 @@ export default async function AdminClientDetailPage({ params }: { params: { orgI
     }
   }
 
+  const { data: opportunities } = org.status === "active"
+    ? await supabase.from("off_page_opportunities").select("status").eq("org_id", org.id)
+    : { data: [] };
+  const opportunityCountsByStatus = (opportunities ?? []).reduce<Record<string, number>>((acc, o) => {
+    acc[o.status] = (acc[o.status] ?? 0) + 1;
+    return acc;
+  }, {});
+
   return (
     <div className="space-y-6">
       <div>
@@ -272,6 +280,24 @@ export default async function AdminClientDetailPage({ params }: { params: { orgI
                 bufferChannels={bufferChannels}
                 bufferError={bufferError}
               />
+            </section>
+          )}
+
+          {org.status === "active" && (
+            <section className="card">
+              <h2 className="mb-3 text-lg font-semibold text-ink-900">Off-Page Activity (read-only)</h2>
+              {Object.keys(opportunityCountsByStatus).length === 0 ? (
+                <p className="text-sm text-ink-400">No opportunities added yet.</p>
+              ) : (
+                <div className="space-y-1 text-sm">
+                  {Object.entries(opportunityCountsByStatus).map(([status, count]) => (
+                    <div key={status} className="flex items-center justify-between border-b border-ink-50 py-1 last:border-0">
+                      <StatusBadge status={status} />
+                      <span className="font-medium text-ink-800">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
           )}
 

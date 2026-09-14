@@ -1,14 +1,15 @@
-# Digital Command — Architecture (Phase 1 + 2 + 3 + 4)
+# Digital Command — Architecture (Phase 1 + 2 + 3 + 4 + 5)
 
 ## Stack
 
 - **Next.js 14 (App Router) + TypeScript** — server components for data fetching, server actions for all mutations.
 - **Supabase**: Postgres + Auth + Storage, accessed via `@supabase/ssr`. RLS is the authorization layer — the app almost never needs the service-role key (see `SECURITY_AND_RLS.md`).
 - **TailwindCSS** for styling, `lucide-react` for icons, `zod` for input validation at the server-action boundary.
-- **`@anthropic-ai/sdk`** (Phase 2+) — server-only, generates 7-Day Planner captions and (Phase 3) report narratives (`claude-haiku-4-5-20251001`). See "AI content generation" and "Reporting" below.
-- **`cheerio`** (Phase 3) — server-only HTML parsing for the technical SEO crawl audit.
+- **`@anthropic-ai/sdk`** (Phase 2+) — server-only, generates 7-Day Planner captions, report narratives (Phase 3), and (Phase 5) off-page opportunity assessments + outreach drafts (`claude-haiku-4-5-20251001`). See "AI content generation", "Reporting", and "Off-page opportunities" below.
+- **`cheerio`** (Phase 3+) — server-only HTML parsing, shared by the SEO crawl audit and (Phase 5) off-page page-fetching (`lib/web/fetch-page.ts`).
 - **Google OAuth (plain `fetch`, no `googleapis` SDK)** (Phase 3+) — Search Console, Analytics Data API, and (Phase 4) YouTube Data API access. A handful of REST calls didn't justify the heavy official SDK.
 - **Buffer GraphQL API (plain `fetch`)** (Phase 4) — Facebook/Instagram publishing, one shared personal API key (see "Publishing dispatch" below for why this is a different model than every other Phase 1–3 connection).
+- **Google Custom Search JSON API (plain `fetch`)** (Phase 5) — brand-mention search, simple API-key auth (no OAuth), app-wide credential, free tier.
 
 ## Route map
 
@@ -28,12 +29,13 @@
 /app/planner               7-Day Content Planner — AI generation, approval workflow, manual uploads (spec §10/§11)
 /app/seo                   Technical SEO audit + Search Console/Analytics connections + keyword tracking (spec §9.1)
 /app/reports               On-demand reports: real metrics + AI-written narrative (spec §21)
+/app/outreach              Off-page opportunities, brand-mention search, AI-drafted outreach, backlink checks (spec §9.2)
 /api/auth/callback         Exchanges Supabase Auth email-link codes for a session
 /api/google/oauth/start    Begins the Search Console / Analytics / YouTube OAuth flow (sets CSRF state cookie)
 /api/google/oauth/callback Verifies state, exchanges code for tokens, stores the connection
 ```
 
-Admin panel: `/admin/clients/[orgId]` gained a "Publishing Channels" section (Phase 4) for linking a client's org+platform to one of VMG's own Buffer channels — see "Publishing dispatch" below.
+Admin panel: `/admin/clients/[orgId]` gained a "Publishing Channels" section (Phase 4) for linking a client's org+platform to one of VMG's own Buffer channels — see "Publishing dispatch" below — and a read-only "Off-Page Activity" opportunity-count summary (Phase 5).
 
 `middleware.ts` (via `lib/supabase/middleware.ts`) refreshes the Supabase session on every request and enforces route guards: auth required for `/admin`, `/app`, `/pending`, `/register/details`; role check + MFA check for `/admin/*`; org-membership + `status === 'active'` check for `/app/*` (which is why `/app/brand`, `/app/links`, `/app/planner` are unreachable until Super Admin activation — same guard, no extra wiring needed).
 
@@ -173,23 +175,65 @@ leaves publish_status='not_sent', which is a normal, expected state.
 
 Spec §25's generic `api_connections` table now has two real, differently-shaped instances rather than one speculative catch-all: `google_connections` (per-org OAuth, client-managed) and `buffer_channel_links` (one shared account's channels, admin-managed) — confirms the Phase 3 prediction that a single `api_connections` table wouldn't fit every provider's credential shape. `api_health_events` (spec §27's Connection Health Center) is still **not created** — each connection table's own `status` column covers today's need.
 
+## Off-page opportunities (Phase 5)
+
+Like Phase 4's Buffer decision, this needed a real check before building: most of spec §9.2's bullets (competitor backlink analysis, web-wide opportunity discovery, lost-backlink monitoring, local citations, digital PR) fundamentally need a paid backlink/SEO-data index — asked the user again specifically for this phase (backlink data isn't the same question as Phase 3's keyword tracking), same answer as before: defer rather than start a new paid vendor relationship. So this is scoped around what's real without one — see `PROJECT_PLAN.md`'s Phase 5 section for the full reasoning.
+
+```
+lib/web/fetch-page.ts — fetchPageContent(url), shared with the Phase 3 SEO audit
+  (extracted so the fetch+cheerio pattern isn't duplicated): title, visible text,
+  mailto: emails, a detected contact-page URL. Also pageLinksToDomain(html, pageUrl,
+  targetDomain) for backlink verification.
+
+addOpportunityAction (app/app/outreach/actions.ts)
+  -> fetchPageContent(url) -> assessOpportunity() (lib/ai/assess-opportunity.ts)
+       -> Claude judges relevance/quality/spam-risk from the ACTUAL fetched text,
+          instructed to never invent facts about the site
+  -> insert off_page_opportunities (status='assessed', or 'new' if the fetch failed —
+     still saved, never silently dropped)
+
+searchBrandMentionsAction -> lib/google/custom-search.ts searchBrandMentions(query)
+  -> insert brand_mention_searches (append-only snapshot, same pattern as Phase 3's
+     *_snapshots). Each result has a "Turn into Opportunity" button that's just
+     addOpportunityAction with opportunity_type='unlinked_mention' — same pipeline.
+
+draftOutreachAction -> draftOutreachMessage() (lib/ai/draft-outreach.ts) — one-at-a-time,
+  context-aware draft using the target page's real content + Brand Brain voice
+  -> insert outreach_messages (status='draft')
+  UI renders a mailto: link (contact email + subject + body, pre-filled) — sending
+  happens in the user's own email client. markOutreachSentAction just records that
+  and sets a 7-day follow_up_due_at + advances the opportunity's status
+  (contacted -> awaiting_response on a follow-up).
+
+checkBacklinkAction -> re-fetches the opportunity's own URL, pageLinksToDomain()
+  against the org's own website (from org_links) -> status flips to 'link_acquired'
+  (first time) or 'lost' (was verified, now isn't) -> this IS real "earned backlink
+  verification" / "lost backlink monitoring" (spec §9.2), scoped to links Digital
+  Command knows about through this pipeline rather than the open web.
+```
+
+**No bulk-send capability exists anywhere in this schema or UI** — every outreach message is drafted and reviewed one opportunity at a time. This isn't a missing feature; it's what keeps Phase 5 structurally compliant with spec §33/§36's "no mass spam, no auto forum/comment spam" rule without relying on a policy nobody enforces.
+
 ## Directory structure
 
 ```
 app/                    Route segments (pages + colocated server actions)
 components/             Shared UI; admin/, client/, registration/, brand/, links/, planner/, seo/, reports/,
-                        publishing/ subfolders
+                        publishing/, outreach/ subfolders
 lib/
   supabase/             Browser/server/middleware Supabase clients + storage upload helper
   audit/                logAudit() helper used by every mutating action
   auth/                 getPostLoginRedirect(), requireSuperAdmin(), requireOrgMember()
   ai/                   client.ts (shared Anthropic client/model), generate-content.ts (captions),
-                        generate-report.ts (report narratives) — Phase 2/3
-  google/               oauth.ts (auth URL, token exchange/refresh), search-console.ts, analytics.ts — Phase 3
+                        generate-report.ts (report narratives), assess-opportunity.ts,
+                        draft-outreach.ts (Phase 5) — Phase 2/3/5
+  google/               oauth.ts (auth URL, token exchange/refresh), search-console.ts, analytics.ts,
+                        custom-search.ts (Phase 5, simple API key, no OAuth) — Phase 3+
   youtube/               client.ts — upload/status via YouTube Data API v3 — Phase 4
   buffer/                client.ts — Buffer GraphQL API wrapper — Phase 4
   publishing/            dispatch.ts — the Social Publishing Adapter's real implementation — Phase 4
   seo/                  audit.ts — the crawl-based technical SEO checker — Phase 3
+  web/                   fetch-page.ts — shared crawl helper (SEO audit + off-page assessment) — Phase 5
   constants/            Business-type doc requirements, plan pricing, required policy list,
                         platform/link-type labels, revision-flow threshold, Google service labels
   validation/           zod schemas for registration input

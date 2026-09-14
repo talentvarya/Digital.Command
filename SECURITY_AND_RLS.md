@@ -2,7 +2,7 @@
 
 ## Principle
 
-Authorization lives in Postgres RLS, not in application code. Server actions run under the **calling user's own session** (the anon key + their JWT), so even a bug in a server action can't let a client see or modify another organization's data — Postgres itself refuses the query. The `SUPABASE_SERVICE_ROLE_KEY` is provisioned for future admin/backfill tooling but is **not used by any Phase 1–4 mutation**. `ANTHROPIC_API_KEY` (Phase 2), `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (Phase 3), and `BUFFER_ACCESS_TOKEN` (Phase 4) are likewise server-only secrets, read exclusively inside `lib/ai/`, `lib/google/oauth.ts`, and `lib/buffer/client.ts` respectively, never sent to the browser.
+Authorization lives in Postgres RLS, not in application code. Server actions run under the **calling user's own session** (the anon key + their JWT), so even a bug in a server action can't let a client see or modify another organization's data — Postgres itself refuses the query. The `SUPABASE_SERVICE_ROLE_KEY` is provisioned for future admin/backfill tooling but is **not used by any Phase 1–5 mutation**. `ANTHROPIC_API_KEY` (Phase 2), `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (Phase 3), `BUFFER_ACCESS_TOKEN` (Phase 4), and `GOOGLE_CUSTOM_SEARCH_API_KEY`/`GOOGLE_CUSTOM_SEARCH_ENGINE_ID` (Phase 5) are likewise server-only secrets, read exclusively inside `lib/ai/`, `lib/google/oauth.ts`, `lib/buffer/client.ts`, and `lib/google/custom-search.ts` respectively, never sent to the browser.
 
 `buffer_channel_links` (Phase 4) is a deliberate exception to "client owns their own org's data": it's **admin-managed**, not client-managed, because the underlying Buffer account is VMG's, not the client's (see the Phase 4 RLS section below and `ARCHITECTURE.md`'s "Publishing dispatch"). Every other per-org table in this app follows the client-owns-their-data pattern; don't copy this one as a default for something new without the same reasoning applying.
 
@@ -64,6 +64,17 @@ Append-only tables (`audit_logs`, `consent_records`, `verification_documents`, `
 
 `BUFFER_ACCESS_TOKEN` deserves the same discipline as Google's tokens above, with one simplification: there's only ever one value (not one per org), read exclusively inside `lib/buffer/client.ts`'s `bufferGraphQL()`, never selected from any table (it's an env var, not a DB column) and never sent to the browser.
 
+### Phase 5 additions (`supabase/migrations/0013_phase5_rls.sql`)
+
+| Table | Client (org member) | Super Admin |
+|---|---|---|
+| `off_page_opportunities`, `outreach_messages` | Full CRUD on their own org's rows — this is the client's own business-development work, same ownership model as `brand_profiles`/`content_items` (not admin-managed like `buffer_channel_links`) | SELECT only (support visibility, an opportunity-count summary — no editing control) |
+| `brand_mention_searches` | SELECT/INSERT own — **no UPDATE/DELETE for anyone** (append-only, same convention as every other `*_snapshots` table) | SELECT all |
+
+`GOOGLE_CUSTOM_SEARCH_API_KEY`/`GOOGLE_CUSTOM_SEARCH_ENGINE_ID` are app-wide, not per-org (unlike the OAuth-based Google connections) — a plain API key has no user-identity concept to scope per organization; every org's brand-mention searches go through the same key, same as `BUFFER_ACCESS_TOKEN`/`ANTHROPIC_API_KEY`.
+
+**No bulk-send capability exists anywhere in the outreach schema or UI** — this is a security/compliance property worth calling out explicitly, not just a UX choice: `outreach_messages` are always created and sent one row, one opportunity, at a time (`draftOutreachAction`/`markOutreachSentAction` in `app/app/outreach/actions.ts` both operate on a single `opportunity_id`). There is no server action, no RLS policy, and no UI control that could send to multiple recipients in one call — the spec's §33/§36 "no mass spam, no auto forum/comment spam" rule is enforced structurally, not by a convention someone could accidentally violate later.
+
 ## Storage
 
 All four buckets (`verification-documents`, `payment-screenshots`, `brand-assets`, `content-media`) are private. Policies check `is_org_member((storage.foldername(name))[1]::uuid)` or `is_super_admin()` against the `{org_id}/...` path prefix, mirroring the owning table's access rules. Signed URLs (short-lived, generated server-side) are used to display documents/media — nothing is ever public.
@@ -82,11 +93,13 @@ Super Admin accounts must enroll TOTP (Supabase Auth's native MFA — no third-p
 - `SUPABASE_SERVICE_ROLE_KEY` — server-only, currently unused by app code; reserved for future admin tooling. Never imported into a Client Component.
 - `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — server-only; read only inside `lib/ai/`, `lib/google/oauth.ts`.
 - `BUFFER_ACCESS_TOKEN` — server-only; read only inside `lib/buffer/client.ts`. Unlike every other secret above, this is **VMG's own personal credential**, not a platform-level app secret — treat it with the same care as an individual's password, since whoever holds it can post as any client channel added to that Buffer account.
+- `GOOGLE_CUSTOM_SEARCH_API_KEY`, `GOOGLE_CUSTOM_SEARCH_ENGINE_ID` — server-only; read only inside `lib/google/custom-search.ts`. Lower sensitivity than the others (a leaked key only allows web searches billed to the project, not account access), but still never exposed to the browser.
 
 ## What's still not covered
 
 - Rate limiting, login-history UI, suspicious-activity alerts (spec §26) — infra-level concerns better handled by Supabase's own auth rate limits initially; a dedicated implementation is a later-phase item.
 - Real KYC/Aadhaar verification — documents are stored and reviewed by a human, not verified against a government API.
-- AI caption generation has a monthly per-org safety cap (Phase 2, `MONTHLY_AI_GENERATION_SAFETY_CAP`); AI report-narrative generation (Phase 3) and publish-dispatch (Phase 4) do **not** have one yet — worth adding before real client traffic, same reasoning as spec §30/§36.
+- AI caption generation has a monthly per-org safety cap (Phase 2, `MONTHLY_AI_GENERATION_SAFETY_CAP`); AI report-narrative generation (Phase 3), publish-dispatch (Phase 4), and off-page assessment/outreach drafting (Phase 5) do **not** have one yet — worth adding before real client traffic, same reasoning as spec §30/§36.
 - Google OAuth tokens are stored as plain columns in Postgres (protected by RLS + the column-discipline above, and Supabase encrypts data at rest) rather than through a dedicated secrets-encryption layer (e.g. `pgsodium`/Vault). Acceptable for this phase given the existing protections; revisit if handling higher-sensitivity scopes later.
 - No rate limit or ownership check on `checkPublishStatusAction`/`dispatchToPublisher` beyond normal org-membership — a client could in principle re-check status repeatedly; low real-world risk (Buffer/YouTube's own APIs would rate-limit first) but worth a look before high-volume use.
+- `addOpportunityAction`/`checkBacklinkAction` fetch arbitrary client-submitted URLs server-side (SSRF-shaped surface, same as Phase 3's SEO audit and link health check) — mitigated by the existing `fetchWithTimeout` abort-after-8s pattern, but there's no allowlist/denylist against internal-network addresses (e.g. `169.254.169.254`, `localhost`). Low risk in a Vercel-style serverless deployment (no internal network to reach) but worth hardening before self-hosting on a VM with internal services.

@@ -54,6 +54,16 @@ Full SQL lives in `supabase/migrations/`. This is the human-readable map.
 
 Unlike every Phase 1–3 connection table (client-managed via `is_org_member`), `buffer_channel_links` is **admin-managed** — clients get read-only visibility, only Super Admin can link/unlink a channel. This isn't an oversight; it follows directly from the Buffer account itself being VMG's, not the client's (see `ARCHITECTURE.md` and `SECURITY_AND_RLS.md`).
 
+## Tables created in Phase 5
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `off_page_opportunities` | A candidate URL the client/admin found, plus its AI assessment (spec §9.2) | `url`, `opportunity_type` (`guest_contribution`\|`broken_link`\|`unlinked_mention`\|`other`), `status` (`new`→`assessed`→`contacted`→`awaiting_response`→`link_acquired`\|`declined`\|`lost`), `relevance_score`/`quality_notes`/`spam_risk` (AI), `contact_email`/`contact_name`, `link_verified`/`link_last_checked_at`/`link_first_confirmed_at` |
+| `outreach_messages` | AI-drafted, one-at-a-time outreach/follow-up messages | `opportunity_id`, `subject`, `body`, `status` (`draft`\|`sent`), `sent_at`, `follow_up_due_at`, `generated_by` |
+| `brand_mention_searches` | Append-only snapshot of a Custom Search query for the brand name | `query`, `searched_at`, `results` (jsonb array of `{title, link, snippet}`) |
+
+`off_page_opportunities` and `outreach_messages` are client-managed (full CRUD via `is_org_member`) — this is the client's own business-development work, same ownership model as `brand_profiles`/`content_items`, unlike Phase 4's admin-managed `buffer_channel_links`. `brand_mention_searches` is append-only (insert/select only), same convention as every other `*_snapshots` table.
+
 ## Triggers / functions
 
 - `handle_new_user()` — inserts a `profiles` row (`role = 'client_owner'`) whenever a new `auth.users` row is created.
@@ -71,4 +81,6 @@ All four use the path convention `{org_id}/{uuid}-{filename}` so a single `stora
 
 ## Tables from the spec's full list (§25) NOT yet created
 
-`websites`, `social_connections` (spec's generic name for publishing connections — turned out to need two differently-shaped real tables, `google_connections` and `buffer_channel_links`, rather than one), `content_approvals` (folded into `content_items.status` + `content_versions` history rather than a separate table), `automation_jobs`, `seo_metrics`/`keyword_metrics` (folded into `seo_audits`/`search_console_snapshots` rather than finer-grained per-day tables — revisit if trend reporting needs daily granularity), `backlink_opportunities`, `outreach_jobs`, `report_metrics` (folded into `reports.metrics_snapshot` jsonb), `api_health_events`, `support_tickets`, `generated_assets` — these belong to Phase 5+ and are deliberately absent so the schema doesn't imply functionality that doesn't exist yet.
+`websites`, `social_connections` (spec's generic name for publishing connections — turned out to need two differently-shaped real tables, `google_connections` and `buffer_channel_links`, rather than one), `content_approvals` (folded into `content_items.status` + `content_versions` history rather than a separate table), `automation_jobs`, `seo_metrics`/`keyword_metrics` (folded into `seo_audits`/`search_console_snapshots` rather than finer-grained per-day tables — revisit if trend reporting needs daily granularity), `report_metrics` (folded into `reports.metrics_snapshot` jsonb), `api_health_events`, `support_tickets`, `generated_assets` — these belong to Phase 6+ and are deliberately absent so the schema doesn't imply functionality that doesn't exist yet.
+
+Spec §25's `backlink_opportunities` and `outreach_jobs` are **partially** represented: `off_page_opportunities`/`outreach_messages` (Phase 5) cover the human-seeded, AI-assessed pipeline described in `ARCHITECTURE.md`, but not a web-wide automated discovery engine — that needs a backlink index (Ahrefs/Semrush/Moz-class), explicitly deferred (see `PROJECT_PLAN.md`'s Phase 5 section).

@@ -10,6 +10,7 @@
 3. Get an Anthropic API key at [console.anthropic.com](https://console.anthropic.com) → `ANTHROPIC_API_KEY` (server-only). Powers the 7-Day Planner's AI caption generation and (Phase 3) report narratives.
 4. Set up a Google Cloud OAuth app for `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (Phase 3+, powers `/app/seo`'s Search Console + Analytics + YouTube connections) — see `../.env.example` for the exact steps. **Read the note in step 5 below before spending time on this** — it has a real timeline implication.
 5. Get a Buffer personal API key for `BUFFER_ACCESS_TOKEN` (Phase 4, powers Facebook/Instagram publishing) — **this is VMG's own Buffer account, not something each client sets up.** See `../.env.example` for exactly why (Buffer's current API doesn't support per-client OAuth) and the steps.
+6. Set up a Google Programmable Search Engine for `GOOGLE_CUSTOM_SEARCH_API_KEY`/`GOOGLE_CUSTOM_SEARCH_ENGINE_ID` (Phase 5, powers `/app/outreach`'s brand-mention search) — see `../.env.example` for the steps. Free tier, no vendor sign-off needed.
 
 Copy `../.env.example` to `../.env.local` and fill these in.
 
@@ -28,6 +29,8 @@ Copy `../.env.example` to `../.env.local` and fill these in.
 9. `migrations/0009_phase3_rls.sql` — Phase 3 row-level security policies
 10. `migrations/0010_phase4_schema.sql` — Buffer channel links, content publish-tracking columns, `youtube` service
 11. `migrations/0011_phase4_rls.sql` — Phase 4 row-level security policies
+12. `migrations/0012_phase5_schema.sql` — off-page opportunities, outreach messages, brand-mention searches
+13. `migrations/0013_phase5_rls.sql` — Phase 5 row-level security policies
 
 (Equivalently, if you use the Supabase CLI: `supabase db push` after linking the project, with these files under `supabase/migrations/`.)
 
@@ -60,8 +63,8 @@ The Search Console (`webmasters.readonly`), Analytics (`analytics.readonly`), an
 ## What's NOT included yet
 
 - Real KYC/Aadhaar/PAN verification API — only stores uploaded documents for a human (Super Admin) to review. Wiring a verification provider is an open item in the master spec (§37.1/§37.2).
-- Email receipts/notifications (spec §20) — deferred to a later phase; the audit log + in-app `notifications` table are the record for now.
+- Email receipts/notifications (spec §20) and automated outreach sending (spec §9.2) — deferred to a later phase for receipts; outreach deliberately always sends through the user's own email client (a pre-filled `mailto:` link), not automatically.
 - Final legal-reviewed policy text — `0004_seed.sql` seeds clearly-labeled DRAFT placeholder copy.
 - Unattended/cron-based Autopilot — generation is on-demand (button click) until a hosting decision unlocks a serverless cron (spec §37.3 is still open).
-- Competitor tracking — deferred by explicit choice rather than starting a new paid SEO-data vendor relationship without sign-off (spec §36). Keyword tracking itself is real (Search Console-based).
+- Competitor tracking, and the backlink-index-class parts of off-page SEO (web-wide opportunity discovery, competitor backlink analysis, local citations, digital PR) — deferred by explicit choice, asked twice (Phase 3 and Phase 5), rather than starting a new paid SEO-data vendor relationship without sign-off (spec §36). Keyword tracking (Search Console-based) and the human-seeded off-page opportunity pipeline (crawl + AI assessment + outreach + backlink verification) are both real.
 - Google Business Profile — needs a separate, stricter Google access-request approval (a 60+-day-old verified profile, a business website, formal review) that can't even be developed against without approval, unlike Search Console's Test-User workaround. Revisit once you have an eligible profile.

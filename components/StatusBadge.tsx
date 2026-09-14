@@ -20,6 +20,14 @@ const STATUS_STYLES: Record<string, string> = {
   not_added: "bg-slate-200 text-slate-800",
   reconnect_required: "bg-orange-100 text-orange-800",
   error: "bg-red-100 text-red-800",
+  new: "bg-ink-100 text-ink-700",
+  assessed: "bg-brand-100 text-brand-700",
+  contacted: "bg-amber-100 text-amber-800",
+  awaiting_response: "bg-amber-100 text-amber-800",
+  link_acquired: "bg-emerald-100 text-emerald-800",
+  declined: "bg-slate-200 text-slate-800",
+  lost: "bg-red-100 text-red-800",
+  sent: "bg-emerald-100 text-emerald-800",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -30,6 +38,8 @@ const STATUS_LABELS: Record<string, string> = {
   waiting_approval: "Waiting Approval",
   not_added: "Not Added",
   reconnect_required: "Reconnect Required",
+  awaiting_response: "Awaiting Response",
+  link_acquired: "Link Acquired",
 };
 
 export function StatusBadge({ status }: { status: string }) {

@@ -9,8 +9,8 @@ Source of truth: `Digital_Command_Claude_Master_Build_Spec.md` (owner-supplied).
 | 1 | Branding shell, Supabase Auth, multi-tenant DB + RLS, Super Admin, client registration, policy acceptance, business verification, manual payment verification, client activation | ✅ Built |
 | 2 | Client dashboard, Brand Brain, website/link setup, 7-day planner, Autopilot/Approval Required, content versions, notifications | ✅ Built |
 | 3 | SEO audit, Search Console, Analytics, reporting, graphs, keyword/competitor tracking | ✅ Built |
-| **4** | Buffer integration, Facebook/Instagram publishing, YouTube, GBP/Local SEO | **This build — GBP deferred, see below** |
-| 5 | Off-page opportunity engine, outreach, digital PR, backlink verification | Not started |
+| 4 | Buffer integration, Facebook/Instagram publishing, YouTube, GBP/Local SEO | ✅ Built — GBP deferred, see below |
+| **5** | Off-page opportunity engine, outreach, digital PR, backlink verification | **This build — backlink-index-class data deferred, see below** |
 | 6 | Paid campaign preparation, manual approval, budget/date controls, ad reporting | Not started |
 | 7 | Client AI Assistant, conversion tracking, cost dashboard, backup/rollback, API health center, emergency freeze, offboarding, sandbox | Not started |
 
@@ -77,3 +77,18 @@ I researched Buffer's actual current API before building this (training data on 
 - **Google Business Profile is not started.** GBP API access requires a separate formal access-request form, a Business Profile that's been verified and **active for 60+ days**, a business website, and a Google review (days to weeks, rejections common) — quota is 0 until approved, so there's no way to even test against it the way Search Console's Test-User model allowed. Revisit once the user has an eligible, 60+-day-old GBP and wants to start that process.
 - No resumable-upload protocol for YouTube — multipart (single request) is simpler and correct for this server-to-server relay; very large videos may hit serverless payload/execution limits depending on the still-open hosting decision (spec §37.3).
 - No AI cost cap on report generation (flagged in Phase 3, still open) or on publishing dispatch — worth adding before real client traffic.
+
+## Phase 5 exit criteria
+
+- A client can add a candidate URL (guest post, broken-link target, unlinked mention) and get a real AI assessment (relevance/quality/spam-risk) of the actually-fetched page, plus any contact email found on it.
+- A client can search for unlinked mentions of their brand (real Google Custom Search results) and turn any result into a tracked opportunity in one click.
+- A client can get a real, personalized (not templated) AI-drafted outreach email per opportunity, open it pre-filled in their own email client, and mark it sent — no bulk-send capability exists anywhere in the schema or UI.
+- A client can verify (on demand) whether a specific URL still links back to their own site, and the opportunity's status reflects `link_acquired` or flips to `lost` accordingly.
+- Super Admin gets a read-only opportunity-status-count summary (support visibility only).
+- `npm run lint` and `npm run build` stay clean.
+
+## Explicit non-goals for Phase 5
+
+- **Backlink-index-class data is not wired up**: competitor backlink analysis, web-wide backlink opportunity discovery, lost-backlink monitoring beyond opportunities this app already knows about, local citation checks, and digital PR opportunity discovery all fundamentally need a paid Ahrefs/Semrush/Moz-class index. Asked the user again specifically for this phase (backlink data isn't the same as Phase 3's keyword-tracking question) — same answer: defer rather than start a new paid vendor relationship without explicit sign-off (spec §36).
+- No automated email sending — outreach is drafted and tracked in Digital Command, but sending happens through the user's own email client (a `mailto:` link, pre-filled). Deliberate, not a gap: there's still no transactional email provider decision made (open since Phase 1, spec §37.4), and personalized 1:1 outreach genuinely performs better from a real inbox than a bulk sender anyway.
+- "Opportunity discovery" here means *assessing a URL a human found*, not an automated web-wide crawler hunting for candidates — that discovery engine is exactly the backlink-index-shaped need that's deferred above.
