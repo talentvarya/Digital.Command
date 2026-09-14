@@ -7,7 +7,8 @@
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon public` key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` key → `SUPABASE_SERVICE_ROLE_KEY` (server-only, keep secret)
-3. Get an Anthropic API key at [console.anthropic.com](https://console.anthropic.com) → `ANTHROPIC_API_KEY` (server-only). Powers the 7-Day Planner's AI caption generation (Phase 2).
+3. Get an Anthropic API key at [console.anthropic.com](https://console.anthropic.com) → `ANTHROPIC_API_KEY` (server-only). Powers the 7-Day Planner's AI caption generation and (Phase 3) report narratives.
+4. Set up a Google Cloud OAuth app for `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (Phase 3, powers `/app/seo`'s Search Console + Analytics connections) — see `../.env.example` for the exact steps. **Read the note in step 5 below before spending time on this** — it has a real timeline implication.
 
 Copy `../.env.example` to `../.env.local` and fill these in.
 
@@ -22,6 +23,8 @@ Copy `../.env.example` to `../.env.local` and fill these in.
 5. `migrations/0005_phase2_schema.sql` — Brand Brain, links, planner, notifications tables
 6. `migrations/0006_phase2_rls.sql` — Phase 2 row-level security policies
 7. `migrations/0007_phase2_storage.sql` — Phase 2 storage buckets + policies
+8. `migrations/0008_phase3_schema.sql` — SEO audits, Google connections, report tables
+9. `migrations/0009_phase3_rls.sql` — Phase 3 row-level security policies
 
 (Equivalently, if you use the Supabase CLI: `supabase db push` after linking the project, with these files under `supabase/migrations/`.)
 
@@ -40,6 +43,10 @@ There is no self-serve Super Admin signup — by design, every new signup become
 
 After registering two separate test client accounts, confirm each can only see their own organization's data (this is what the RLS policies in `0002_rls.sql` enforce) — this is the most important thing to check before onboarding a real client.
 
+## 5. Google OAuth verification timeline — read before you invest time in this
+
+The Search Console (`webmasters.readonly`) and Analytics (`analytics.readonly`) scopes are Google-classified as **sensitive**. Until your OAuth app passes Google's verification review, **only Google accounts you've explicitly added as Test Users** on the OAuth consent screen (Google Cloud Console → APIs & Services → OAuth consent screen → Test users) can complete a connection — anyone else sees an "app not verified" block. Verification can take anywhere from same-day to a few weeks depending on Google's review queue and whether they ask for more information. This is a real external dependency (master spec's own open item §37.13), not something to schedule around casually if you want real clients connecting Search Console/Analytics soon — start the verification process early, and use Test Users to develop/demo against in the meantime.
+
 ## What's NOT included yet
 
 - Real KYC/Aadhaar/PAN verification API — only stores uploaded documents for a human (Super Admin) to review. Wiring a verification provider is an open item in the master spec (§37.1/§37.2).
@@ -47,3 +54,4 @@ After registering two separate test client accounts, confirm each can only see t
 - Final legal-reviewed policy text — `0004_seed.sql` seeds clearly-labeled DRAFT placeholder copy.
 - Actual publishing to Facebook/Instagram/YouTube — the 7-Day Planner's realistic terminal state is `scheduled`, not `published` (Phase 4/Buffer).
 - Unattended/cron-based Autopilot — generation is on-demand (button click) until a hosting decision unlocks a serverless cron (spec §37.3 is still open).
+- Competitor tracking — deferred by explicit choice rather than starting a new paid SEO-data vendor relationship without sign-off (spec §36). Keyword tracking itself is real (Search Console-based).

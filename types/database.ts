@@ -268,3 +268,87 @@ export interface AuditLog {
   failure_reason: string | null;
   created_at: string;
 }
+
+export type GoogleService = "search_console" | "analytics";
+export type GoogleConnectionStatus = "connected" | "not_added" | "reconnect_required" | "error";
+
+// Safe-to-render shape — never includes access_token/refresh_token. See
+// SECURITY_AND_RLS.md: queries used for UI must select only these columns.
+export interface GoogleConnectionPublic {
+  id: string;
+  org_id: string;
+  service: GoogleService;
+  external_property: string | null;
+  status: GoogleConnectionStatus;
+  last_synced_at: string | null;
+}
+
+export interface SeoIssue {
+  severity: "critical" | "warning" | "info";
+  type: string;
+  message: string;
+}
+
+export interface SeoAudit {
+  id: string;
+  org_id: string;
+  url: string;
+  score: number;
+  issues: SeoIssue[];
+  crawled_at: string;
+  triggered_by: string | null;
+}
+
+export interface SearchConsoleQueryRow {
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+export interface SearchConsolePageRow {
+  page: string;
+  clicks: number;
+  impressions: number;
+}
+
+export interface SearchConsoleSnapshot {
+  id: string;
+  org_id: string;
+  synced_at: string;
+  site_url: string;
+  date_range_start: string;
+  date_range_end: string;
+  total_clicks: number;
+  total_impressions: number;
+  avg_ctr: number;
+  avg_position: number;
+  top_queries: SearchConsoleQueryRow[];
+  top_pages: SearchConsolePageRow[];
+}
+
+export interface AnalyticsSnapshot {
+  id: string;
+  org_id: string;
+  synced_at: string;
+  property_id: string;
+  date_range_start: string;
+  date_range_end: string;
+  sessions: number;
+  users: number;
+  conversions: number;
+  top_pages: { page: string; sessions: number }[];
+}
+
+export interface Report {
+  id: string;
+  org_id: string;
+  period_start: string;
+  period_end: string;
+  generated_at: string;
+  generated_by: string | null;
+  metrics_snapshot: Record<string, unknown>;
+  summary_text: string | null;
+  next_plan_text: string | null;
+}

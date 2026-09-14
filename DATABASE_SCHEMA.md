@@ -32,6 +32,18 @@ Full SQL lives in `supabase/migrations/`. This is the human-readable map.
 
 `client_settings.content_control_mode` (`autopilot`\|`approval_required`, default `approval_required`) drives whether AI-generated content auto-schedules or waits for client approval — see `ARCHITECTURE.md`'s "AI content generation" section.
 
+## Tables created in Phase 3
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `google_connections` | OAuth state for Search Console/Analytics | `service` (`search_console`\|`analytics`), `external_property`, `access_token`/`refresh_token` (server-only, never in a client-rendered query), `status`, `last_synced_at` — unique per `(org_id, service)` |
+| `seo_audits` | Technical crawl-audit results | `url`, `score` (0–100), `issues` (jsonb array of `{severity, type, message}`), `crawled_at` |
+| `search_console_snapshots` | One row per sync — also the keyword-tracking data source | `site_url`, `total_clicks`/`total_impressions`/`avg_ctr`/`avg_position`, `top_queries`/`top_pages` (jsonb) |
+| `analytics_snapshots` | One row per sync | `property_id`, `sessions`/`users`/`conversions`, `top_pages` (jsonb) |
+| `reports` | Generated on demand (spec §21) | `period_start`/`period_end`, `metrics_snapshot` (jsonb — the real numbers), `summary_text`/`next_plan_text` (AI-written, only from those numbers) |
+
+`seo_audits`, `search_console_snapshots`, `analytics_snapshots`, and `reports` are all **append-only by design** — each audit/sync/report creates a new row rather than updating an old one, which is what makes period-over-period trend comparisons possible. `google_connections` is the one Phase 3 table that does get updated in place (token refresh, property selection) and deleted (disconnect).
+
 ## Triggers / functions
 
 - `handle_new_user()` — inserts a `profiles` row (`role = 'client_owner'`) whenever a new `auth.users` row is created.
@@ -45,8 +57,8 @@ Full SQL lives in `supabase/migrations/`. This is the human-readable map.
 - `brand-assets` (private) — Phase 2, logo uploads
 - `content-media` (private) — Phase 2, planner images/videos
 
-All four use the path convention `{org_id}/{uuid}-{filename}` so a single `storage.foldername(name)[1]` policy check scopes access per organization.
+All four use the path convention `{org_id}/{uuid}-{filename}` so a single `storage.foldername(name)[1]` policy check scopes access per organization. Phase 3 added no new buckets — Google data is API-fetched, not file-stored.
 
 ## Tables from the spec's full list (§25) NOT yet created
 
-`websites`, `social_connections` (OAuth-authenticated publishing connections — `org_links` covers the manual-URL need for now), `content_approvals` (folded into `content_items.status` + `content_versions` history rather than a separate table — revisit if reporting needs a dedicated approval-events table), `automation_jobs`, `seo_metrics`, `keyword_metrics`, `backlink_opportunities`, `outreach_jobs`, `reports`, `report_metrics`, `api_connections`, `api_health_events`, `support_tickets`, `generated_assets` — these belong to Phase 3+ and are deliberately absent so the schema doesn't imply functionality that doesn't exist yet.
+`websites`, `social_connections` (OAuth-authenticated *publishing* connections for Phase 4 — a different shape than `google_connections`, which is read-only reporting access), `content_approvals` (folded into `content_items.status` + `content_versions` history rather than a separate table), `automation_jobs`, `seo_metrics`/`keyword_metrics` (folded into `seo_audits`/`search_console_snapshots` rather than finer-grained per-day tables — revisit if trend reporting needs daily granularity), `backlink_opportunities`, `outreach_jobs`, `report_metrics` (folded into `reports.metrics_snapshot` jsonb), `api_health_events`, `support_tickets`, `generated_assets` — these belong to Phase 4+ and are deliberately absent so the schema doesn't imply functionality that doesn't exist yet.

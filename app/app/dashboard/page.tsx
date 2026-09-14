@@ -88,8 +88,8 @@ export default async function ClientDashboardPage() {
           <ModuleLinkCard icon={Palette} title="Brand Brain" subtitle="Voice, visuals & guardrails for AI content" href="/app/brand" />
           <ModuleLinkCard icon={ClipboardList} title="7-Day Content Planner" subtitle="Generate, review & approve — includes your approval queue" href="/app/planner" />
           <ModuleLinkCard icon={Link2} title="Website & Channel Connections" subtitle="Add links, check they're reachable" href="/app/links" />
-          <ComingSoonCard icon={FileBarChart} title="Reports" />
-          <ComingSoonCard icon={Search} title="SEO" />
+          <ModuleLinkCard icon={Search} title="SEO" subtitle="Technical audit, Search Console & Analytics, keyword tracking" href="/app/seo" />
+          <ModuleLinkCard icon={FileBarChart} title="Reports" subtitle="Real data, AI-written summary — every 7 or 14 days" href="/app/reports" />
           <ComingSoonCard icon={Link2} title="Off-Page SEO" />
           <ComingSoonCard icon={Share2} title="SMO Publishing (Facebook / Instagram)" />
           <ComingSoonCard icon={Youtube} title="YouTube" />

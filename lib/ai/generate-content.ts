@@ -1,16 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropicClient, HAIKU_MODEL, AiGenerationError } from "@/lib/ai/client";
 import type { BrandProfile, ContentPlatform } from "@/types/database";
 
-// Short, high-volume marketing captions don't need a frontier model — Haiku
-// keeps this fast and cheap, which matters given the spec's emphasis on
-// per-client AI cost control (Digital_Command_Claude_Master_Build_Spec.md §30/§32).
-const MODEL = "claude-haiku-4-5-20251001";
-
-let client: Anthropic | null = null;
-function getClient(): Anthropic {
-  if (!client) client = new Anthropic();
-  return client;
-}
+export { AiGenerationError } from "@/lib/ai/client";
 
 export interface GenerateCaptionParams {
   platform: ContentPlatform;
@@ -23,8 +15,6 @@ export interface GeneratedCaption {
   caption: string;
   hashtags: string[];
 }
-
-export class AiGenerationError extends Error {}
 
 function buildSystemPrompt(brandProfile: BrandProfile | null): string {
   const lines = [
@@ -93,8 +83,8 @@ export async function generateCaption(params: GenerateCaptionParams): Promise<Ge
   }
 
   try {
-    const response = await getClient().messages.create({
-      model: MODEL,
+    const response = await getAnthropicClient().messages.create({
+      model: HAIKU_MODEL,
       max_tokens: 1024,
       system: buildSystemPrompt(params.brandProfile),
       messages: [{ role: "user", content: buildUserPrompt(params) }],
