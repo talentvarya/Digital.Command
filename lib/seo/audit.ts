@@ -13,10 +13,16 @@ export async function runSeoAudit(baseUrl: string): Promise<SeoAuditResult> {
   const issues: SeoIssue[] = [];
   let score = 100;
   const normalizedBase = baseUrl.replace(/\/+$/, "");
+  // robots.txt/sitemap.xml must live at the domain root per spec, regardless
+  // of what page/path the client entered (e.g. "https://example.com/en") —
+  // checking them relative to that path instead of the origin produces false
+  // "not found" results for any client whose URL includes a path. Found via
+  // a real audit against kimi.com, which has both correctly at its root.
+  const origin = new URL(normalizedBase).origin;
 
   let robotsText = "";
   try {
-    const res = await fetchWithTimeout(`${normalizedBase}/robots.txt`);
+    const res = await fetchWithTimeout(`${origin}/robots.txt`);
     if (res.ok) {
       robotsText = await res.text();
       if (/^\s*Disallow:\s*\/\s*$/im.test(robotsText) && !/^\s*Allow:/im.test(robotsText)) {
@@ -32,7 +38,7 @@ export async function runSeoAudit(baseUrl: string): Promise<SeoAuditResult> {
     score -= 5;
   }
 
-  let sitemapUrl = `${normalizedBase}/sitemap.xml`;
+  let sitemapUrl = `${origin}/sitemap.xml`;
   const sitemapDirective = robotsText.match(/Sitemap:\s*(\S+)/i);
   if (sitemapDirective) sitemapUrl = sitemapDirective[1];
 
