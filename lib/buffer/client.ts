@@ -25,7 +25,15 @@ async function bufferGraphQL<T>(query: string, variables?: Record<string, unknow
   });
 
   if (!res.ok) {
-    throw new BufferApiError(`Buffer API error: ${res.status} ${await res.text()}`);
+    if (res.status === 401) {
+      throw new BufferApiError("Buffer authentication failed — check BUFFER_ACCESS_TOKEN.");
+    }
+    // Buffer returns a GraphQL-shaped {errors:[{message}]} body even on non-2xx
+    // responses — parse it for a readable message instead of dumping the raw
+    // response text, which can otherwise leak straight into the admin UI.
+    const body = await res.json().catch(() => null);
+    const message = body?.errors?.map((e: { message: string }) => e.message).join("; ");
+    throw new BufferApiError(`Buffer API error: ${message ?? `HTTP ${res.status}`}`);
   }
 
   const json = await res.json();
