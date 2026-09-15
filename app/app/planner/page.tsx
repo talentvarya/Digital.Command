@@ -32,7 +32,11 @@ export default async function PlannerPage() {
   const days = nextSevenDays();
 
   const [{ data: settings }, { data: items }] = await Promise.all([
-    supabase.from("client_settings").select("content_control_mode, approval_then_autopilot").eq("org_id", membership.org_id).maybeSingle(),
+    supabase
+      .from("client_settings")
+      .select("content_control_mode, approval_then_autopilot, autopilot_platforms")
+      .eq("org_id", membership.org_id)
+      .maybeSingle(),
     supabase
       .from("content_items")
       .select("*")
@@ -84,6 +88,7 @@ export default async function PlannerPage() {
       <ControlModeBar
         mode={settings?.content_control_mode ?? "approval_required"}
         approvalThenAutopilot={settings?.approval_then_autopilot ?? false}
+        autopilotPlatforms={settings?.autopilot_platforms ?? []}
       />
 
       <div className="space-y-4">

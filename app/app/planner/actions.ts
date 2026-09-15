@@ -39,82 +39,37 @@ async function getBrandAndSettings(supabase: ReturnType<typeof createClient>, or
 }
 
 // ============================================================================
-// AI generation — first attempt or "Generate Another" / suggestion-based retry
+// Shared core: generate one caption for one slot and persist it. Used by both
+// the single-slot form action below and the Autopilot "fill this week" bulk
+// action — kept as one function so the two never drift on the status/policy/
+// dispatch logic.
 // ============================================================================
-export async function generateAiContentAction(
-  _prevState: ActionResult,
-  formData: FormData
-): Promise<ActionResult> {
-  const supabase = createClient();
-  const member = await requireOrgMember(supabase);
-  if ("error" in member) return member;
-  const { userId, orgId } = member;
-
-  const automation = await checkAutomationAllowed(supabase, orgId);
-  if (!automation.allowed) return { error: automation.reason };
-
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
-  const { count: generationsThisMonth } = await supabase
-    .from("content_versions")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", orgId)
-    .in("generated_by", ["ai", "client_suggestion", "gpt_assistant"])
-    .gte("created_at", startOfMonth.toISOString());
-  if ((generationsThisMonth ?? 0) >= MONTHLY_AI_GENERATION_SAFETY_CAP) {
-    return {
-      error: `Monthly AI generation limit reached (${MONTHLY_AI_GENERATION_SAFETY_CAP}). Contact support to raise it, or add your own content directly.`,
-    };
+async function generateOneSlot(
+  supabase: ReturnType<typeof createClient>,
+  params: {
+    orgId: string;
+    userId: string;
+    platform: ContentPlatform;
+    scheduledDate: string;
+    controlMode: ContentControlMode;
+    brand: BrandProfile | null;
+    itemId?: string | null;
+    attemptNumber?: number;
+    previousCaptions?: string[];
+    clientSuggestion?: string | null;
   }
-
-  const contentItemId = (formData.get("contentItemId") as string) || null;
-  const clientSuggestion = ((formData.get("clientSuggestion") as string) || "").trim() || null;
-  const { brand, controlMode } = await getBrandAndSettings(supabase, orgId);
-
-  let itemId = contentItemId;
-  let platform: ContentPlatform;
-  let scheduledDate: string;
-  let attemptNumber: number;
-  let previousCaptions: string[] = [];
-
-  if (contentItemId) {
-    const { data: item } = await supabase
-      .from("content_items")
-      .select("*")
-      .eq("id", contentItemId)
-      .single();
-    if (!item) return { error: "Content item not found." };
-    if (item.locked) return { error: "This item is locked and can't be regenerated." };
-
-    if (item.rejection_count >= REJECTIONS_BEFORE_SUGGESTION && !clientSuggestion) {
-      return { error: "Please add your suggestion — three AI options have already been generated for this slot." };
-    }
-
-    const { data: versions } = await supabase
-      .from("content_versions")
-      .select("caption")
-      .eq("content_item_id", contentItemId)
-      .order("version_number", { ascending: false })
-      .limit(3);
-    previousCaptions = (versions ?? []).map((v) => v.caption).filter(Boolean) as string[];
-
-    platform = item.platform;
-    scheduledDate = item.scheduled_date;
-    attemptNumber = item.rejection_count + 1;
-  } else {
-    platform = formData.get("platform") as ContentPlatform;
-    scheduledDate = formData.get("scheduledDate") as string;
-    attemptNumber = 1;
-    if (!platform || !scheduledDate) return { error: "Platform and date are required." };
-  }
+): Promise<{ error: string } | { itemId: string }> {
+  const { orgId, userId, platform, scheduledDate, controlMode, brand } = params;
+  const attemptNumber = params.attemptNumber ?? 1;
+  const clientSuggestion = params.clientSuggestion ?? null;
+  let itemId = params.itemId ?? null;
 
   let generated;
   try {
     generated = await generateCaption({
       platform,
       brandProfile: brand,
-      previousCaptions,
+      previousCaptions: params.previousCaptions ?? [],
       clientSuggestion,
     });
   } catch (err) {
@@ -165,6 +120,7 @@ export async function generateAiContentAction(
     if (error || !updatedItem) return { error: error?.message ?? "Could not update content item." };
     savedItem = updatedItem;
   }
+  if (!itemId) return { error: "Could not resolve content item id." };
 
   const { data: versionRows } = await supabase
     .from("content_versions")
@@ -207,7 +163,187 @@ export async function generateAiContentAction(
     newState: { status, attemptNumber, heldForPolicy },
   });
 
+  return { itemId };
+}
+
+// ============================================================================
+// AI generation — first attempt or "Generate Another" / suggestion-based retry
+// ============================================================================
+export async function generateAiContentAction(
+  _prevState: ActionResult,
+  formData: FormData
+): Promise<ActionResult> {
+  const supabase = createClient();
+  const member = await requireOrgMember(supabase);
+  if ("error" in member) return member;
+  const { userId, orgId } = member;
+
+  const automation = await checkAutomationAllowed(supabase, orgId);
+  if (!automation.allowed) return { error: automation.reason };
+
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+  const { count: generationsThisMonth } = await supabase
+    .from("content_versions")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", orgId)
+    .in("generated_by", ["ai", "client_suggestion", "gpt_assistant"])
+    .gte("created_at", startOfMonth.toISOString());
+  if ((generationsThisMonth ?? 0) >= MONTHLY_AI_GENERATION_SAFETY_CAP) {
+    return {
+      error: `Monthly AI generation limit reached (${MONTHLY_AI_GENERATION_SAFETY_CAP}). Contact support to raise it, or add your own content directly.`,
+    };
+  }
+
+  const contentItemId = (formData.get("contentItemId") as string) || null;
+  const clientSuggestion = ((formData.get("clientSuggestion") as string) || "").trim() || null;
+  const { brand, controlMode } = await getBrandAndSettings(supabase, orgId);
+
+  let platform: ContentPlatform;
+  let scheduledDate: string;
+  let attemptNumber: number;
+  let previousCaptions: string[] = [];
+
+  if (contentItemId) {
+    const { data: item } = await supabase
+      .from("content_items")
+      .select("*")
+      .eq("id", contentItemId)
+      .single();
+    if (!item) return { error: "Content item not found." };
+    if (item.locked) return { error: "This item is locked and can't be regenerated." };
+
+    if (item.rejection_count >= REJECTIONS_BEFORE_SUGGESTION && !clientSuggestion) {
+      return { error: "Please add your suggestion — three AI options have already been generated for this slot." };
+    }
+
+    const { data: versions } = await supabase
+      .from("content_versions")
+      .select("caption")
+      .eq("content_item_id", contentItemId)
+      .order("version_number", { ascending: false })
+      .limit(3);
+    previousCaptions = (versions ?? []).map((v) => v.caption).filter(Boolean) as string[];
+
+    platform = item.platform;
+    scheduledDate = item.scheduled_date;
+    attemptNumber = item.rejection_count + 1;
+  } else {
+    platform = formData.get("platform") as ContentPlatform;
+    scheduledDate = formData.get("scheduledDate") as string;
+    attemptNumber = 1;
+    if (!platform || !scheduledDate) return { error: "Platform and date are required." };
+  }
+
+  const result = await generateOneSlot(supabase, {
+    orgId,
+    userId,
+    platform,
+    scheduledDate,
+    controlMode,
+    brand,
+    itemId: contentItemId,
+    attemptNumber,
+    previousCaptions,
+    clientSuggestion,
+  });
+  if ("error" in result) return result;
+
   refresh();
+  return {};
+}
+
+// ============================================================================
+// Autopilot "Fill this week" — bulk-generates for every (day, platform) in
+// the current 7-day window that doesn't already have a content item, across
+// the platforms the client has selected for Autopilot. Still a click the
+// client initiates (spec's "every content change needs the client's own
+// approval or an explicit Autopilot opt-in" principle — see assistant-chat.ts
+// — is unchanged, just applied to many slots per click instead of one).
+// ============================================================================
+export async function runAutopilotFillAction(_prevState: ActionResult, _formData: FormData): Promise<ActionResult> {
+  const supabase = createClient();
+  const member = await requireOrgMember(supabase);
+  if ("error" in member) return member;
+  const { userId, orgId } = member;
+
+  const automation = await checkAutomationAllowed(supabase, orgId);
+  if (!automation.allowed) return { error: automation.reason };
+
+  const { data: settings } = await supabase
+    .from("client_settings")
+    .select("content_control_mode, autopilot_platforms")
+    .eq("org_id", orgId)
+    .maybeSingle();
+  const controlMode = (settings?.content_control_mode as ContentControlMode | undefined) ?? "approval_required";
+  const platforms = (settings?.autopilot_platforms as ContentPlatform[] | undefined) ?? [];
+
+  if (controlMode !== "autopilot") return { error: "Switch to Autopilot mode first." };
+  if (platforms.length === 0) return { error: "Pick at least one platform for Autopilot to fill first." };
+
+  const days: string[] = [];
+  const today = new Date();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+
+  const { data: existing } = await supabase
+    .from("content_items")
+    .select("platform, scheduled_date")
+    .eq("org_id", orgId)
+    .gte("scheduled_date", days[0])
+    .lte("scheduled_date", days[days.length - 1]);
+  const filled = new Set((existing ?? []).map((i) => `${i.scheduled_date}:${i.platform}`));
+
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+  const { count: generationsThisMonth } = await supabase
+    .from("content_versions")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", orgId)
+    .in("generated_by", ["ai", "client_suggestion", "gpt_assistant"])
+    .gte("created_at", startOfMonth.toISOString());
+  let remaining = MONTHLY_AI_GENERATION_SAFETY_CAP - (generationsThisMonth ?? 0);
+  if (remaining <= 0) {
+    return {
+      error: `Monthly AI generation limit reached (${MONTHLY_AI_GENERATION_SAFETY_CAP}). Contact support to raise it, or add your own content directly.`,
+    };
+  }
+
+  const { brand } = await getBrandAndSettings(supabase, orgId);
+
+  let created = 0;
+  let lastError: string | null = null;
+  for (const date of days) {
+    for (const platform of platforms) {
+      if (remaining <= 0) break;
+      if (filled.has(`${date}:${platform}`)) continue;
+
+      const result = await generateOneSlot(supabase, {
+        orgId,
+        userId,
+        platform,
+        scheduledDate: date,
+        controlMode,
+        brand,
+      });
+      remaining -= 1;
+      if ("error" in result) {
+        lastError = result.error;
+      } else {
+        created += 1;
+      }
+    }
+  }
+
+  refresh();
+  if (created === 0) {
+    return { error: lastError ?? "Nothing to fill — every selected platform already has content for this week." };
+  }
   return {};
 }
 
@@ -655,6 +791,7 @@ export async function setControlModeAction(_prevState: ActionResult, formData: F
 
   const mode = formData.get("mode") as ContentControlMode;
   const approvalThenAutopilot = formData.get("approvalThenAutopilot") === "true";
+  const autopilotPlatforms = formData.getAll("autopilotPlatforms") as ContentPlatform[];
 
   const { error } = await supabase
     .from("client_settings")
@@ -662,6 +799,7 @@ export async function setControlModeAction(_prevState: ActionResult, formData: F
       content_control_mode: mode,
       approval_then_autopilot: approvalThenAutopilot,
       autopilot_since: mode === "autopilot" ? new Date().toISOString().slice(0, 10) : null,
+      autopilot_platforms: autopilotPlatforms,
     })
     .eq("org_id", member.orgId);
   if (error) return { error: error.message };
@@ -673,7 +811,7 @@ export async function setControlModeAction(_prevState: ActionResult, formData: F
     source: "CLIENT_MANUAL",
     actionType: "control_mode_changed",
     target: member.orgId,
-    newState: { mode, approvalThenAutopilot },
+    newState: { mode, approvalThenAutopilot, autopilotPlatforms },
   });
 
   refresh();

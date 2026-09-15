@@ -145,6 +145,7 @@ export interface ClientSettings {
   content_control_mode: ContentControlMode;
   approval_then_autopilot: boolean;
   autopilot_since: string | null;
+  autopilot_platforms: ContentPlatform[];
   manual_buffer_cost_usd: number | null;
   manual_storage_cost_usd: number | null;
   manual_other_cost_usd: number | null;
