@@ -95,10 +95,8 @@ export default function MfaSetupPage() {
 
         {!loading && qrCode && (
           <>
-            <div
-              className="mx-auto mb-4 h-48 w-48 [&_svg]:h-full [&_svg]:w-full"
-              dangerouslySetInnerHTML={{ __html: qrCode }}
-            />
+            {/* eslint-disable-next-line @next/next/no-img-element -- qrCode is a data: URI from Supabase, not a static asset */}
+            <img src={qrCode} alt="Two-factor authentication QR code" className="mx-auto mb-4 h-48 w-48" />
             {secret && (
               <p className="mb-4 break-all rounded bg-ink-50 px-3 py-2 text-center text-xs text-ink-500">
                 Can&apos;t scan? Enter this key manually: <span className="font-mono">{secret}</span>
