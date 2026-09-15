@@ -20,7 +20,9 @@ export function AdminNav() {
     <header className="border-b border-ink-100 bg-white">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-8">
-          <Logo subtitle={false} />
+          <Link href="/admin/dashboard">
+            <Logo subtitle={false} />
+          </Link>
           <nav className="flex items-center gap-1">
             <Link
               href="/admin/dashboard"
