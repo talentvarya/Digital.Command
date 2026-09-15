@@ -76,6 +76,29 @@ export function CostRow({
         </div>
       </div>
 
+      {(() => {
+        const costInr = usdToInr(totalCostUsd);
+        const scale = Math.max(revenueInr, costInr, 1);
+        return (
+          <div className="mt-3 space-y-1.5">
+            <div className="h-2.5 overflow-hidden rounded-full bg-ink-50">
+              <div className="h-full rounded-full" style={{ width: `${Math.min((revenueInr / scale) * 100, 100)}%`, backgroundColor: "#1baf7a" }} />
+            </div>
+            <div className="h-2.5 overflow-hidden rounded-full bg-ink-50">
+              <div className="h-full rounded-full" style={{ width: `${Math.min((costInr / scale) * 100, 100)}%`, backgroundColor: "#eb6834" }} />
+            </div>
+            <div className="flex gap-4 text-[11px] text-ink-400">
+              <span className="flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#1baf7a" }} /> Revenue
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#eb6834" }} /> Total cost
+              </span>
+            </div>
+          </div>
+        );
+      })()}
+
       {editing && (
         <ActionForm action={updateManualCostsAction} className="mt-3 flex flex-wrap items-end gap-2 rounded-lg bg-ink-50 p-3">
           {(state) => (

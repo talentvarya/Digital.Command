@@ -1,4 +1,5 @@
-import { MetricBar } from "./MetricBar";
+import { Search, Target, Users, Gauge } from "lucide-react";
+import { MetricStatCard, CHART_COLORS } from "@/components/charts/StatCard";
 import type { Report } from "@/types/database";
 import type { ReportMetricsInput } from "@/lib/ai/generate-report";
 
@@ -26,33 +27,45 @@ export function ReportCard({ report }: { report: Report }) {
         </div>
       )}
 
-      <div className="grid gap-4 border-t border-ink-50 pt-4 sm:grid-cols-2">
+      <div className="grid gap-3 border-t border-ink-50 pt-4 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.seoAudit && (
-          <MetricBar
+          <MetricStatCard
+            icon={Gauge}
             label="SEO Health Score"
             current={metrics.seoAudit.score}
             previous={metrics.seoAudit.previousScore}
             formatter={(v) => `${v}/100`}
+            color={CHART_COLORS.blue}
           />
         )}
         {metrics.searchConsole && (
           <>
-            <MetricBar
+            <MetricStatCard
+              icon={Search}
               label="Search Console Clicks"
               current={metrics.searchConsole.clicks}
               previous={metrics.searchConsole.previousClicks}
+              color={CHART_COLORS.orange}
             />
-            <MetricBar
+            <MetricStatCard
+              icon={Target}
               label="Average Position"
               current={metrics.searchConsole.avgPosition}
               previous={metrics.searchConsole.previousAvgPosition}
               higherIsBetter={false}
               formatter={(v) => v.toFixed(1)}
+              color={CHART_COLORS.violet}
             />
           </>
         )}
         {metrics.analytics && (
-          <MetricBar label="Sessions" current={metrics.analytics.sessions} previous={metrics.analytics.previousSessions} />
+          <MetricStatCard
+            icon={Users}
+            label="Sessions"
+            current={metrics.analytics.sessions}
+            previous={metrics.analytics.previousSessions}
+            color={CHART_COLORS.aqua}
+          />
         )}
       </div>
     </div>
