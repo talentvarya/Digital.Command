@@ -1,6 +1,7 @@
 import { ContentItemCard } from "./ContentItemCard";
 import { NewContentForm } from "./NewContentForm";
-import type { ContentItem, ContentMedia, ContentVersion } from "@/types/database";
+import type { ContentItem, ContentVersion } from "@/types/database";
+import type { ContentMediaWithUrl } from "@/app/app/planner/page";
 
 export function DayCard({
   date,
@@ -10,7 +11,7 @@ export function DayCard({
 }: {
   date: string;
   items: ContentItem[];
-  mediaByItem: Map<string, ContentMedia[]>;
+  mediaByItem: Map<string, ContentMediaWithUrl[]>;
   versionsByItem: Map<string, ContentVersion[]>;
 }) {
   const label = new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {

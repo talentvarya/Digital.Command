@@ -20,7 +20,8 @@ import {
   restoreContentVersionAction,
 } from "@/app/app/planner/actions";
 import { PLATFORM_LABELS, REJECTIONS_BEFORE_SUGGESTION } from "@/lib/constants/content";
-import type { ContentItem, ContentMedia, ContentVersion } from "@/types/database";
+import type { ContentItem, ContentVersion } from "@/types/database";
+import type { ContentMediaWithUrl } from "@/app/app/planner/page";
 
 const SOURCE_LABELS: Record<string, string> = {
   ai_generated: "AI Generated",
@@ -38,7 +39,7 @@ const VERSION_LABELS: Record<string, string> = {
   restored: "Restored",
 };
 
-export function ContentItemCard({ item, media, versions }: { item: ContentItem; media: ContentMedia[]; versions: ContentVersion[] }) {
+export function ContentItemCard({ item, media, versions }: { item: ContentItem; media: ContentMediaWithUrl[]; versions: ContentVersion[] }) {
   const [editing, setEditing] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
@@ -124,21 +125,42 @@ export function ContentItemCard({ item, media, versions }: { item: ContentItem; 
 
       {media.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2">
-          {media.map((m) => (
-            <div key={m.id} className="flex items-center gap-1 rounded border border-ink-100 px-2 py-1 text-xs text-ink-500">
-              {m.media_type}
-              <ActionForm action={removeContentMediaAction}>
-                {() => (
-                  <>
-                    <input type="hidden" name="mediaId" value={m.id} />
-                    <button type="submit" aria-label="Remove media" className="text-ink-400 hover:text-red-600">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </>
-                )}
-              </ActionForm>
-            </div>
-          ))}
+          {media.map((m) =>
+            m.media_type === "image" && m.signedUrl ? (
+              <div key={m.id} className="group relative h-20 w-20 overflow-hidden rounded-lg border border-ink-100">
+                {/* eslint-disable-next-line @next/next/no-img-element -- signed URL, not a static asset next/image can optimize */}
+                <img src={m.signedUrl} alt="" className="h-full w-full object-cover" />
+                <ActionForm action={removeContentMediaAction}>
+                  {() => (
+                    <>
+                      <input type="hidden" name="mediaId" value={m.id} />
+                      <button
+                        type="submit"
+                        aria-label="Remove media"
+                        className="absolute right-1 top-1 rounded-full bg-ink-900/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </>
+                  )}
+                </ActionForm>
+              </div>
+            ) : (
+              <div key={m.id} className="flex items-center gap-1 rounded border border-ink-100 px-2 py-1 text-xs text-ink-500">
+                {m.media_type}
+                <ActionForm action={removeContentMediaAction}>
+                  {() => (
+                    <>
+                      <input type="hidden" name="mediaId" value={m.id} />
+                      <button type="submit" aria-label="Remove media" className="text-ink-400 hover:text-red-600">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </>
+                  )}
+                </ActionForm>
+              </div>
+            )
+          )}
         </div>
       )}
 

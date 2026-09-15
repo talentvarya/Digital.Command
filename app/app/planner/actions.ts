@@ -10,6 +10,7 @@ import { generateCaption, findAvoidedWords, AiGenerationError } from "@/lib/ai/g
 import { logAiUsage } from "@/lib/ai/log-usage";
 import { REJECTIONS_BEFORE_SUGGESTION, MONTHLY_AI_GENERATION_SAFETY_CAP } from "@/lib/constants/content";
 import { dispatchToPublisher } from "@/lib/publishing/dispatch";
+import { attachUnsplashPhoto, captionToImageQuery } from "@/lib/unsplash/attach";
 import { getBufferPostStatus } from "@/lib/buffer/client";
 import { getValidAccessToken } from "@/lib/google/oauth";
 import { getYoutubeVideoStatus } from "@/lib/youtube/client";
@@ -146,6 +147,23 @@ async function generateOneSlot(
       type: "content_held_for_review",
       title: "AI content held for your review",
       body: `Autopilot generated a caption containing "${avoidedWords.join(", ")}" — it needs your approval instead of auto-scheduling.`,
+    });
+  }
+
+  // Auto-attach a free stock photo matching the caption — only when this
+  // slot has no media yet, so regenerating a caption never piles up extra
+  // photos. Best-effort (see attachUnsplashPhoto's own doc comment): a
+  // missing/unconfigured UNSPLASH_ACCESS_KEY or a search miss never fails
+  // the generation that already succeeded.
+  const { count: existingMediaCount } = await supabase
+    .from("content_media")
+    .select("id", { count: "exact", head: true })
+    .eq("content_item_id", itemId);
+  if (!existingMediaCount) {
+    await attachUnsplashPhoto(supabase, {
+      orgId,
+      contentItemId: itemId,
+      query: captionToImageQuery(generated.caption, platform),
     });
   }
 

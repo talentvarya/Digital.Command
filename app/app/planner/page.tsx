@@ -4,6 +4,8 @@ import { ControlModeBar } from "@/components/planner/ControlModeBar";
 import { DayCard } from "@/components/planner/DayCard";
 import type { ContentMedia, ContentVersion } from "@/types/database";
 
+export type ContentMediaWithUrl = ContentMedia & { signedUrl: string | null };
+
 function nextSevenDays(): string[] {
   const days: string[] = [];
   const today = new Date();
@@ -54,8 +56,15 @@ export default async function PlannerPage() {
       ])
     : [{ data: [] as ContentMedia[] }, { data: [] as ContentVersion[] }];
 
-  const mediaByItem = new Map<string, ContentMedia[]>();
-  (media ?? []).forEach((m) => {
+  const mediaWithUrls: ContentMediaWithUrl[] = await Promise.all(
+    (media ?? []).map(async (m) => {
+      const { data } = await supabase.storage.from("content-media").createSignedUrl(m.storage_path, 300);
+      return { ...m, signedUrl: data?.signedUrl ?? null };
+    })
+  );
+
+  const mediaByItem = new Map<string, ContentMediaWithUrl[]>();
+  mediaWithUrls.forEach((m) => {
     const list = mediaByItem.get(m.content_item_id) ?? [];
     list.push(m);
     mediaByItem.set(m.content_item_id, list);
