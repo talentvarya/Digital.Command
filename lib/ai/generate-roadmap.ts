@@ -52,8 +52,9 @@ Hard rules (never break these):
 - "vision": 3-4 sentences, second person ("Imagine...", "Picture this..."), concrete and sensory, ending on an aspirational high note — this is the emotional peak of the whole page.
 - "urgencyLine": ONE punchy sentence creating gentle urgency/FOMO (e.g. competitors moving faster while they wait) — no fear-mongering, no fake scarcity ("only 2 spots left" type claims).
 - "currentState": 2-4 short bullets naming real gaps based on what they told you (e.g. no reviews, inconsistent posting, no SEO) — honest, not harsh.
-- "phases": exactly 4 phases for a realistic 90-day rollout, each with a short title, a timeframe ("Week 1-2", "Week 3-4", "Month 2", "Month 3"), and 2-3 short bullet points.
-Respond with ONLY a JSON object: {"currentState": string[], "phases": [{"title": string, "timeframe": string, "points": string[]}], "vision": string, "urgencyLine": string}`;
+- "phases": exactly 4 phases, each with a short title and 2-3 short bullet points. Do NOT include a timeframe, week number, or month number anywhere — no "Week 1-2", no "Month 2", nothing that dates the phase. Order the 4 phases logically instead (foundation first, growth later) without ever naming a duration.
+- Real, factual service detail to work into whichever phase covers social media/content (do not skip this): social media posting (SMO) happens twice a day, one post in the morning and one in the evening — state this plainly as something that's included, not as a promised outcome.
+Respond with ONLY a JSON object: {"currentState": string[], "phases": [{"title": string, "points": string[]}], "vision": string, "urgencyLine": string}`;
 }
 
 export async function generateRoadmap(input: RoadmapLeadInput): Promise<GeneratedRoadmap> {

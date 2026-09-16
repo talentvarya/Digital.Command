@@ -205,10 +205,7 @@ function RoadmapResult({ lead, language }: { lead: NonNullable<RoadmapActionResu
               {i + 2}
             </div>
             <div>
-              <div className="mb-1 flex flex-wrap items-center gap-2">
-                <h4 className="font-semibold text-white">{phase.title}</h4>
-                <span className="font-mono text-xs text-white/40">{phase.timeframe}</span>
-              </div>
+              <h4 className="mb-1 font-semibold text-white">{phase.title}</h4>
               <ul className="space-y-1">
                 {phase.points.map((point, j) => (
                   <li key={j} className="text-sm text-white/60">

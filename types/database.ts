@@ -591,7 +591,10 @@ export type LeadStatus = "new" | "contacted" | "converted" | "not_interested";
 
 export interface RoadmapPhase {
   title: string;
-  timeframe: string;
+  // Optional, not generated going forward — kept for older stored rows that
+  // still have it (see generate-roadmap.ts, which dropped timeframes from
+  // the AI output at the user's request).
+  timeframe?: string;
   points: string[];
 }
 

@@ -4,7 +4,6 @@ import type { RoadmapPhase } from "@/types/database";
 interface Step {
   done: boolean;
   label: string;
-  sub?: string;
 }
 
 function Node({ step, index }: { step: Step; index: number }) {
@@ -18,7 +17,6 @@ function Node({ step, index }: { step: Step; index: number }) {
         {step.done ? <Check className="h-5 w-5" /> : index}
       </div>
       <div className="mt-2 max-w-[110px] text-xs font-semibold leading-snug text-white sm:max-w-[140px]">{step.label}</div>
-      {step.sub && <div className="mt-0.5 font-mono text-[10px] text-white/40">{step.sub}</div>}
     </div>
   );
 }
@@ -29,10 +27,7 @@ function Node({ step, index }: { step: Step; index: number }) {
 // vertical version at phone width where 5 nodes in a row would get too
 // cramped to read.
 export function RoadmapJourneyDiagram({ phases, readyLabel }: { phases: RoadmapPhase[]; readyLabel: string }) {
-  const steps: Step[] = [
-    { done: true, label: readyLabel },
-    ...phases.map((p) => ({ done: false, label: p.title, sub: p.timeframe })),
-  ];
+  const steps: Step[] = [{ done: true, label: readyLabel }, ...phases.map((p) => ({ done: false, label: p.title }))];
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
@@ -66,7 +61,6 @@ export function RoadmapJourneyDiagram({ phases, readyLabel }: { phases: RoadmapP
             </div>
             <div className="pb-4 pt-1.5">
               <div className="text-sm font-semibold leading-snug text-white">{step.label}</div>
-              {step.sub && <div className="font-mono text-[11px] text-white/40">{step.sub}</div>}
             </div>
           </div>
         ))}
