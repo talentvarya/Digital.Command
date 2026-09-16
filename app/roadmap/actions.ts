@@ -23,6 +23,16 @@ export async function generateRoadmapLeadAction(
   _prevState: RoadmapActionResult,
   formData: FormData
 ): Promise<RoadmapActionResult> {
+  try {
+    return await handleGenerateRoadmapLead(formData);
+  } catch (err) {
+    // TEMPORARY: surface the real message while diagnosing a live bug —
+    // narrow this back down once the root cause is confirmed and fixed.
+    return { error: err instanceof Error ? `DEBUG: ${err.message}` : "DEBUG: unknown error" };
+  }
+}
+
+async function handleGenerateRoadmapLead(formData: FormData): Promise<RoadmapActionResult> {
   // Honeypot — a real visitor never sees this field (hidden via CSS in the
   // form); a bot filling every field usually fills this one too.
   if (((formData.get("company_website") as string) || "").trim()) {
