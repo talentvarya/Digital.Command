@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { generateRoadmap } from "@/lib/ai/generate-roadmap";
 import { AiGenerationError } from "@/lib/ai/client";
+import { ROADMAP_COPY, type RoadmapLanguage } from "@/lib/i18n/roadmap";
 import type { RoadmapLead } from "@/types/database";
 
 // Safety ceiling on a public, unauthenticated, AI-calling form — same
@@ -32,7 +33,10 @@ export async function generateRoadmapLeadAction(
     return await handleGenerateRoadmapLead(formData);
   } catch (err) {
     console.error("roadmap lead generation failed", err);
-    return { error: "Kuch gadbad ho gayi — ek baar phir try karein." };
+    const language: RoadmapLanguage = formData.get("language") === "hi" ? "hi" : "en";
+    return {
+      error: language === "hi" ? "Kuch gadbad ho gayi — ek baar phir try karein." : "Something went wrong — please try again.",
+    };
   }
 }
 
@@ -43,11 +47,14 @@ async function handleGenerateRoadmapLead(formData: FormData): Promise<RoadmapAct
     return {};
   }
 
+  const language: RoadmapLanguage = formData.get("language") === "hi" ? "hi" : "en";
+  const copy = ROADMAP_COPY[language];
+
   const businessName = ((formData.get("businessName") as string) || "").trim();
   const contactName = ((formData.get("contactName") as string) || "").trim();
   const contactPhone = ((formData.get("contactPhone") as string) || "").trim();
   if (!businessName || !contactName || !contactPhone) {
-    return { error: "Business name, your name, and phone number are required." };
+    return { error: copy.formError };
   }
 
   const supabase = createServiceClient();
@@ -59,7 +66,12 @@ async function handleGenerateRoadmapLead(formData: FormData): Promise<RoadmapAct
     .select("id", { count: "exact", head: true })
     .gte("created_at", startOfDay.toISOString());
   if ((count ?? 0) >= DAILY_ROADMAP_CAP) {
-    return { error: "We've hit today's free-roadmap limit — please try again tomorrow, or just call/WhatsApp us directly." };
+    return {
+      error:
+        language === "hi"
+          ? "Aaj ke free-roadmap ki limit poori ho gayi — kal phir try karein, ya seedha call/WhatsApp kar dein."
+          : "We've hit today's free-roadmap limit — please try again tomorrow, or just call/WhatsApp us directly.",
+    };
   }
 
   const input = {
@@ -77,6 +89,7 @@ async function handleGenerateRoadmapLead(formData: FormData): Promise<RoadmapAct
     competitors: ((formData.get("competitors") as string) || "").trim(),
     brandTone: ((formData.get("brandTone") as string) || "").trim(),
     productsOffers: ((formData.get("productsOffers") as string) || "").trim(),
+    language,
   };
 
   let generated;
@@ -90,6 +103,7 @@ async function handleGenerateRoadmapLead(formData: FormData): Promise<RoadmapAct
   const { data: lead, error } = await supabase
     .from("roadmap_leads")
     .insert({
+      language,
       business_name: businessName,
       contact_name: contactName,
       contact_phone: contactPhone,

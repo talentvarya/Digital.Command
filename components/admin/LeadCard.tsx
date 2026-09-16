@@ -21,6 +21,9 @@ export function LeadCard({ lead }: { lead: RoadmapLead }) {
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-ink-900">{lead.business_name}</h3>
             <StatusBadge status={lead.status} />
+            <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-ink-500">
+              {lead.language === "hi" ? "Hinglish" : "English"}
+            </span>
           </div>
           <p className="mt-0.5 text-sm text-ink-600">
             {lead.contact_name} · {lead.industry || "industry not given"} {lead.city ? `· ${lead.city}` : ""}

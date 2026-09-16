@@ -597,6 +597,7 @@ export interface RoadmapPhase {
 
 export interface RoadmapLead {
   id: string;
+  language: "en" | "hi";
   business_name: string;
   contact_name: string;
   contact_phone: string;
