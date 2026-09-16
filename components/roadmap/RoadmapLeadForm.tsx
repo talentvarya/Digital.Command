@@ -214,11 +214,21 @@ function RoadmapResult({ lead }: { lead: NonNullable<RoadmapActionResult["lead"]
           Yeh roadmap shuru karne ke liye bas ek call/message door hai
         </p>
         <div className="flex flex-col justify-center gap-3 sm:flex-row">
-          {waHref && (
+          {waHref ? (
             <a href={waHref} target="_blank" rel="noreferrer" className="btn-primary justify-center px-6 py-3 text-base">
               <MessageCircle className="mr-2 inline h-4.5 w-4.5" />
               WhatsApp par baat karein
             </a>
+          ) : (
+            <button
+              type="button"
+              disabled
+              title="Jald hi active hoga"
+              className="inline-flex cursor-not-allowed items-center justify-center rounded-lg bg-white/10 px-6 py-3 text-base font-semibold text-white/40"
+            >
+              <MessageCircle className="mr-2 inline h-4.5 w-4.5" />
+              WhatsApp (jald hi)
+            </button>
           )}
           {telHref && (
             <a
