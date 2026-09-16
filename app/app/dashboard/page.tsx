@@ -25,6 +25,16 @@ import { MasterStopPanel } from "@/components/client/MasterStopPanel";
 import { CHART_COLORS } from "@/components/charts/StatCard";
 import { BILLING_TERM_LABELS } from "@/lib/constants/plans";
 
+// Warm rotation for the Modules grid, separate from CHART_COLORS' full
+// categorical palette (which stays reserved for actual charts/legends) —
+// blue/red/orange/yellow reads more energetic for a grid of clickable tiles.
+const MODULE_COLORS = {
+  blue: CHART_COLORS.blue,
+  red: "#dc3d3d",
+  orange: CHART_COLORS.orange,
+  yellow: CHART_COLORS.yellow,
+} as const;
+
 function daysRemaining(expiry: string | null): number | null {
   if (!expiry) return null;
   const diff = new Date(expiry).getTime() - Date.now();
@@ -79,60 +89,60 @@ export default async function ClientDashboardPage() {
         <MasterStopPanel masterStop={settings?.master_stop ?? false} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="relative overflow-hidden rounded-xl border border-ink-100 bg-white p-4">
-          <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: CHART_COLORS.blue }} />
-          <div className="mb-2 flex h-7 w-7 items-center justify-center rounded-md" style={{ backgroundColor: `${CHART_COLORS.blue}1a`, color: CHART_COLORS.blue }}>
-            <Package className="h-3.5 w-3.5" />
+      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="relative overflow-hidden rounded-lg border border-ink-100 bg-white p-2.5">
+          <div className="absolute inset-x-0 top-0 h-0.5" style={{ backgroundColor: CHART_COLORS.blue }} />
+          <div className="mb-1 flex h-5 w-5 items-center justify-center rounded" style={{ backgroundColor: `${CHART_COLORS.blue}1a`, color: CHART_COLORS.blue }}>
+            <Package className="h-2.5 w-2.5" />
           </div>
-          <div className="text-xs uppercase text-ink-400">Package</div>
-          <div className="text-lg font-semibold text-ink-900">{(subscription as any)?.plans?.name ?? "—"}</div>
-          <div className="text-xs text-ink-500">
+          <div className="text-[10px] uppercase text-ink-400">Package</div>
+          <div className="truncate text-sm font-semibold text-ink-900">{(subscription as any)?.plans?.name ?? "—"}</div>
+          <div className="text-[11px] text-ink-500">
             {subscription ? BILLING_TERM_LABELS[subscription.billing_term as keyof typeof BILLING_TERM_LABELS] : ""}
           </div>
         </div>
-        <div className="relative overflow-hidden rounded-xl border border-ink-100 bg-white p-4">
-          <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: CHART_COLORS.violet }} />
-          <div className="mb-2 flex h-7 w-7 items-center justify-center rounded-md" style={{ backgroundColor: `${CHART_COLORS.violet}1a`, color: CHART_COLORS.violet }}>
-            <CalendarClock className="h-3.5 w-3.5" />
+        <div className="relative overflow-hidden rounded-lg border border-ink-100 bg-white p-2.5">
+          <div className="absolute inset-x-0 top-0 h-0.5" style={{ backgroundColor: CHART_COLORS.violet }} />
+          <div className="mb-1 flex h-5 w-5 items-center justify-center rounded" style={{ backgroundColor: `${CHART_COLORS.violet}1a`, color: CHART_COLORS.violet }}>
+            <CalendarClock className="h-2.5 w-2.5" />
           </div>
-          <div className="text-xs uppercase text-ink-400">Start / Expiry</div>
-          <div className="text-sm text-ink-900">{subscription?.start_date ?? "—"}</div>
-          <div className="text-sm text-ink-500">to {subscription?.expiry_date ?? "—"}</div>
+          <div className="text-[10px] uppercase text-ink-400">Start / Expiry</div>
+          <div className="text-[11px] text-ink-900">{subscription?.start_date ?? "—"}</div>
+          <div className="text-[11px] text-ink-500">to {subscription?.expiry_date ?? "—"}</div>
         </div>
-        <div className="relative overflow-hidden rounded-xl border border-ink-100 bg-white p-4">
-          <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: CHART_COLORS.aqua }} />
-          <div className="mb-2 flex h-7 w-7 items-center justify-center rounded-md" style={{ backgroundColor: `${CHART_COLORS.aqua}1a`, color: CHART_COLORS.aqua }}>
-            <Hourglass className="h-3.5 w-3.5" />
+        <div className="relative overflow-hidden rounded-lg border border-ink-100 bg-white p-2.5">
+          <div className="absolute inset-x-0 top-0 h-0.5" style={{ backgroundColor: CHART_COLORS.aqua }} />
+          <div className="mb-1 flex h-5 w-5 items-center justify-center rounded" style={{ backgroundColor: `${CHART_COLORS.aqua}1a`, color: CHART_COLORS.aqua }}>
+            <Hourglass className="h-2.5 w-2.5" />
           </div>
-          <div className="text-xs uppercase text-ink-400">Remaining Days</div>
-          <div className="text-2xl font-bold text-ink-900 [font-variant-numeric:tabular-nums]">{remaining ?? "—"}</div>
+          <div className="text-[10px] uppercase text-ink-400">Remaining Days</div>
+          <div className="text-base font-bold text-ink-900 [font-variant-numeric:tabular-nums]">{remaining ?? "—"}</div>
         </div>
-        <div className="relative overflow-hidden rounded-xl border border-ink-100 bg-white p-4">
-          <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: CHART_COLORS.orange }} />
-          <div className="mb-2 flex h-7 w-7 items-center justify-center rounded-md" style={{ backgroundColor: `${CHART_COLORS.orange}1a`, color: CHART_COLORS.orange }}>
-            <ShieldCheck className="h-3.5 w-3.5" />
+        <div className="relative overflow-hidden rounded-lg border border-ink-100 bg-white p-2.5">
+          <div className="absolute inset-x-0 top-0 h-0.5" style={{ backgroundColor: CHART_COLORS.orange }} />
+          <div className="mb-1 flex h-5 w-5 items-center justify-center rounded" style={{ backgroundColor: `${CHART_COLORS.orange}1a`, color: CHART_COLORS.orange }}>
+            <ShieldCheck className="h-2.5 w-2.5" />
           </div>
-          <div className="text-xs uppercase text-ink-400">Verification</div>
-          <div className="mt-1">{verification ? <StatusBadge status={verification.status} /> : "—"}</div>
-          <div className="mt-2 text-xs uppercase text-ink-400">Automation</div>
-          <div className="text-sm text-ink-800">{settings?.automation_status ?? "Not started"}</div>
+          <div className="text-[10px] uppercase text-ink-400">Verification</div>
+          <div className="mt-0.5">{verification ? <StatusBadge status={verification.status} /> : "—"}</div>
+          <div className="mt-1 text-[10px] uppercase text-ink-400">Automation</div>
+          <div className="text-[11px] text-ink-800">{settings?.automation_status ?? "Not started"}</div>
         </div>
       </div>
 
       <section>
         <h2 className="mb-3 text-lg font-semibold text-ink-900">Modules</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <ModuleLinkCard icon={Palette} title="Brand Brain" subtitle="Voice, visuals & guardrails for AI content" href="/app/brand" color={CHART_COLORS.violet} />
-          <ModuleLinkCard icon={ClipboardList} title="Content Planner" subtitle="Generate, review, approve — publishes automatically via Buffer/YouTube once scheduled" href="/app/planner" color={CHART_COLORS.blue} />
-          <ModuleLinkCard icon={Link2} title="Website & Channel Connections" subtitle="Add links, check they're reachable" href="/app/links" color={CHART_COLORS.magenta} />
-          <ModuleLinkCard icon={Search} title="SEO" subtitle="Technical audit, Search Console & Analytics & YouTube connections, keyword tracking" href="/app/seo" color={CHART_COLORS.aqua} />
-          <ModuleLinkCard icon={FileBarChart} title="Reports" subtitle="Real data, AI-written summary — every 7 or 14 days" href="/app/reports" color={CHART_COLORS.aqua} />
-          <ModuleLinkCard icon={Handshake} title="Off-Page & Outreach" subtitle="Brand mentions, opportunity assessment, personalized outreach, backlink checks" href="/app/outreach" color={CHART_COLORS.aqua} />
-          <ModuleLinkCard icon={Megaphone} title="Paid Advertising" subtitle="AI-drafted campaign briefs, your budget, your approval — launch always stays manual" href="/app/paid-campaigns" color={CHART_COLORS.orange} />
-          <ModuleLinkCard icon={Sparkles} title="AI Assistant" subtitle="Ask about your report, edit or skip a post, draft something new" href="/app/assistant" color={CHART_COLORS.blue} />
-          <ModuleLinkCard icon={MousePointerClick} title="Conversions" subtitle="Trackable WhatsApp/call/form links plus a real Google Organic → Sales funnel" href="/app/conversions" color={CHART_COLORS.yellow} />
-          <ModuleLinkCard icon={HeartPulse} title="Connection Health" subtitle="One place to see what's connected, not added, or needs reconnecting" href="/app/health" color={CHART_COLORS.magenta} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <ModuleLinkCard icon={Palette} title="Brand Brain" subtitle="Voice, visuals & guardrails for AI content" href="/app/brand" color={MODULE_COLORS.blue} />
+          <ModuleLinkCard icon={ClipboardList} title="Content Planner" subtitle="Generate, review, approve — publishes automatically via Buffer/YouTube once scheduled" href="/app/planner" color={MODULE_COLORS.red} />
+          <ModuleLinkCard icon={Link2} title="Website & Channel Connections" subtitle="Add links, check they're reachable" href="/app/links" color={MODULE_COLORS.orange} />
+          <ModuleLinkCard icon={Search} title="SEO" subtitle="Technical audit, Search Console & Analytics & YouTube connections, keyword tracking" href="/app/seo" color={MODULE_COLORS.yellow} />
+          <ModuleLinkCard icon={FileBarChart} title="Reports" subtitle="Real data, AI-written summary — pick 7 days to 12 months" href="/app/reports" color={MODULE_COLORS.blue} />
+          <ModuleLinkCard icon={Handshake} title="Off-Page & Outreach" subtitle="Brand mentions, opportunity assessment, personalized outreach, backlink checks" href="/app/outreach" color={MODULE_COLORS.red} />
+          <ModuleLinkCard icon={Megaphone} title="Paid Advertising" subtitle="AI-drafted campaign briefs, your budget, your approval — launch always stays manual" href="/app/paid-campaigns" color={MODULE_COLORS.orange} />
+          <ModuleLinkCard icon={Sparkles} title="AI Assistant" subtitle="Ask about your report, edit or skip a post, draft something new" href="/app/assistant" color={MODULE_COLORS.yellow} />
+          <ModuleLinkCard icon={MousePointerClick} title="Conversions" subtitle="Trackable WhatsApp/call/form links plus a real Google Organic → Sales funnel" href="/app/conversions" color={MODULE_COLORS.blue} />
+          <ModuleLinkCard icon={HeartPulse} title="Connection Health" subtitle="One place to see what's connected, not added, or needs reconnecting" href="/app/health" color={MODULE_COLORS.red} />
           <ComingSoonCard icon={MapPin} title="Local SEO / Google Business Profile" />
         </div>
       </section>
