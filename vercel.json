@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/planner-fill",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}

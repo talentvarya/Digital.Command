@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { uploadOrgFile } from "@/lib/supabase/upload";
 import { requireOrgMember } from "@/lib/auth/require-org-member";
@@ -28,7 +29,7 @@ function parseHashtags(value: FormDataEntryValue | null): string[] {
     .filter(Boolean);
 }
 
-async function getBrandAndSettings(supabase: ReturnType<typeof createClient>, orgId: string) {
+export async function getBrandAndSettings(supabase: SupabaseClient, orgId: string) {
   const [{ data: brand }, { data: settings }] = await Promise.all([
     supabase.from("brand_profiles").select("*").eq("org_id", orgId).maybeSingle(),
     supabase.from("client_settings").select("*").eq("org_id", orgId).maybeSingle(),
@@ -45,8 +46,8 @@ async function getBrandAndSettings(supabase: ReturnType<typeof createClient>, or
 // action — kept as one function so the two never drift on the status/policy/
 // dispatch logic.
 // ============================================================================
-async function generateOneSlot(
-  supabase: ReturnType<typeof createClient>,
+export async function generateOneSlot(
+  supabase: SupabaseClient,
   params: {
     orgId: string;
     userId: string;
@@ -59,6 +60,10 @@ async function generateOneSlot(
     previousCaptions?: string[];
     clientSuggestion?: string | null;
     scheduledTime?: string | null;
+    // Who/what actually triggered this — a human clicking a button
+    // (default) vs the unattended daily Autopilot cron. Audit trail only;
+    // doesn't change behavior.
+    auditSource?: "CLIENT_MANUAL" | "AUTOPILOT";
   }
 ): Promise<{ error: string } | { itemId: string }> {
   const { orgId, userId, platform, scheduledDate, controlMode, brand } = params;
@@ -173,11 +178,12 @@ async function generateOneSlot(
     await dispatchToPublisher(supabase, savedItem);
   }
 
+  const auditSource = params.auditSource ?? "CLIENT_MANUAL";
   await logAudit(supabase, {
     orgId,
     actorUserId: userId,
-    actorRole: "client_owner",
-    source: "CLIENT_MANUAL",
+    actorRole: auditSource === "AUTOPILOT" ? "autopilot" : "client_owner",
+    source: auditSource,
     actionType: "content_generated",
     target: itemId,
     newState: { status, attemptNumber, heldForPolicy },
