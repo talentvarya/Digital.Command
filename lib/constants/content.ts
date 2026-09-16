@@ -6,6 +6,14 @@ export const PLATFORM_LABELS: Record<ContentPlatform, string> = {
   youtube: "YouTube",
 };
 
+// Fixed daily slots — lets a client (or Autopilot) post twice a day per
+// platform instead of once. Plain "HH:mm" strings stored on
+// content_items.scheduled_time; not a general time picker, just these two.
+export const TIME_SLOTS: { value: string; label: string }[] = [
+  { value: "09:00", label: "Morning (9:00 AM)" },
+  { value: "18:00", label: "Evening (6:00 PM)" },
+];
+
 export const LINK_TYPE_LABELS: Record<LinkType, string> = {
   website: "Website",
   blog: "Blog",

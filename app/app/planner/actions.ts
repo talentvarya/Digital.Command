@@ -8,7 +8,7 @@ import { logAudit } from "@/lib/audit/log";
 import { checkAutomationAllowed, isEmergencyFrozen } from "@/lib/automation/guard";
 import { generateCaption, findAvoidedWords, AiGenerationError } from "@/lib/ai/generate-content";
 import { logAiUsage } from "@/lib/ai/log-usage";
-import { REJECTIONS_BEFORE_SUGGESTION, MONTHLY_AI_GENERATION_SAFETY_CAP } from "@/lib/constants/content";
+import { REJECTIONS_BEFORE_SUGGESTION, MONTHLY_AI_GENERATION_SAFETY_CAP, TIME_SLOTS } from "@/lib/constants/content";
 import { dispatchToPublisher } from "@/lib/publishing/dispatch";
 import { attachUnsplashPhoto, captionToImageQuery } from "@/lib/unsplash/attach";
 import { getBufferPostStatus } from "@/lib/buffer/client";
@@ -58,6 +58,7 @@ async function generateOneSlot(
     attemptNumber?: number;
     previousCaptions?: string[];
     clientSuggestion?: string | null;
+    scheduledTime?: string | null;
   }
 ): Promise<{ error: string } | { itemId: string }> {
   const { orgId, userId, platform, scheduledDate, controlMode, brand } = params;
@@ -91,6 +92,7 @@ async function generateOneSlot(
         org_id: orgId,
         platform,
         scheduled_date: scheduledDate,
+        scheduled_time: params.scheduledTime ?? null,
         caption: generated.caption,
         hashtags: generated.hashtags,
         status,
@@ -222,6 +224,7 @@ export async function generateAiContentAction(
   let scheduledDate: string;
   let attemptNumber: number;
   let previousCaptions: string[] = [];
+  let scheduledTime: string | null = null;
 
   if (contentItemId) {
     const { data: item } = await supabase
@@ -250,6 +253,7 @@ export async function generateAiContentAction(
   } else {
     platform = formData.get("platform") as ContentPlatform;
     scheduledDate = formData.get("scheduledDate") as string;
+    scheduledTime = (formData.get("scheduledTime") as string) || null;
     attemptNumber = 1;
     if (!platform || !scheduledDate) return { error: "Platform and date are required." };
   }
@@ -265,6 +269,7 @@ export async function generateAiContentAction(
     attemptNumber,
     previousCaptions,
     clientSuggestion,
+    scheduledTime,
   });
   if ("error" in result) return result;
 
@@ -310,11 +315,15 @@ export async function runAutopilotFillAction(_prevState: ActionResult, _formData
 
   const { data: existing } = await supabase
     .from("content_items")
-    .select("platform, scheduled_date")
+    .select("platform, scheduled_date, scheduled_time")
     .eq("org_id", orgId)
     .gte("scheduled_date", days[0])
     .lte("scheduled_date", days[days.length - 1]);
-  const filled = new Set((existing ?? []).map((i) => `${i.scheduled_date}:${i.platform}`));
+  // Slot key includes time so Autopilot can fill both the morning and
+  // evening slot per platform per day, not just one.
+  const filled = new Set(
+    (existing ?? []).map((i) => `${i.scheduled_date}:${i.platform}:${i.scheduled_time ?? TIME_SLOTS[0].value}`)
+  );
 
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
@@ -338,22 +347,25 @@ export async function runAutopilotFillAction(_prevState: ActionResult, _formData
   let lastError: string | null = null;
   for (const date of days) {
     for (const platform of platforms) {
-      if (remaining <= 0) break;
-      if (filled.has(`${date}:${platform}`)) continue;
+      for (const slot of TIME_SLOTS) {
+        if (remaining <= 0) break;
+        if (filled.has(`${date}:${platform}:${slot.value}`)) continue;
 
-      const result = await generateOneSlot(supabase, {
-        orgId,
-        userId,
-        platform,
-        scheduledDate: date,
-        controlMode,
-        brand,
-      });
-      remaining -= 1;
-      if ("error" in result) {
-        lastError = result.error;
-      } else {
-        created += 1;
+        const result = await generateOneSlot(supabase, {
+          orgId,
+          userId,
+          platform,
+          scheduledDate: date,
+          controlMode,
+          brand,
+          scheduledTime: slot.value,
+        });
+        remaining -= 1;
+        if ("error" in result) {
+          lastError = result.error;
+        } else {
+          created += 1;
+        }
       }
     }
   }
@@ -481,6 +493,7 @@ export async function createManualContentAction(
 
   const platform = formData.get("platform") as ContentPlatform;
   const scheduledDate = formData.get("scheduledDate") as string;
+  const scheduledTime = (formData.get("scheduledTime") as string) || null;
   const caption = (formData.get("caption") as string) ?? "";
   const hashtags = parseHashtags(formData.get("hashtags"));
   const mediaFile = formData.get("media") as File | null;
@@ -496,6 +509,7 @@ export async function createManualContentAction(
       org_id: orgId,
       platform,
       scheduled_date: scheduledDate,
+      scheduled_time: scheduledTime,
       caption,
       hashtags,
       status: "scheduled",

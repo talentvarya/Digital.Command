@@ -6,7 +6,7 @@ import { ActionForm } from "@/components/ActionForm";
 import { FormError } from "@/components/FormError";
 import { SubmitButton } from "@/components/SubmitButton";
 import { generateAiContentAction, createManualContentAction } from "@/app/app/planner/actions";
-import { PLATFORM_LABELS } from "@/lib/constants/content";
+import { PLATFORM_LABELS, TIME_SLOTS } from "@/lib/constants/content";
 import type { ContentPlatform } from "@/types/database";
 
 export function NewContentForm({ date }: { date: string }) {
@@ -41,6 +41,16 @@ export function NewContentForm({ date }: { date: string }) {
                 ))}
               </select>
             </div>
+            <div>
+              <label className="field-label">Time</label>
+              <select name="scheduledTime" className="field-input" defaultValue={TIME_SLOTS[0].value}>
+                {TIME_SLOTS.map((slot) => (
+                  <option key={slot.value} value={slot.value}>
+                    {slot.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <SubmitButton className="btn-primary px-3 py-2 text-sm" pendingLabel="Generating…">
               Generate
             </SubmitButton>
@@ -60,13 +70,23 @@ export function NewContentForm({ date }: { date: string }) {
         <>
           <input type="hidden" name="scheduledDate" value={date} />
           <FormError message={state.error} />
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-3">
             <div>
               <label className="field-label">Platform</label>
               <select name="platform" className="field-input" required>
                 {Object.entries(PLATFORM_LABELS).map(([value, label]) => (
                   <option key={value} value={value as ContentPlatform}>
                     {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="field-label">Time</label>
+              <select name="scheduledTime" className="field-input" defaultValue={TIME_SLOTS[0].value}>
+                {TIME_SLOTS.map((slot) => (
+                  <option key={slot.value} value={slot.value}>
+                    {slot.label}
                   </option>
                 ))}
               </select>
