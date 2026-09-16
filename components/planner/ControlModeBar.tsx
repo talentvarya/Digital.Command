@@ -14,12 +14,10 @@ export function ControlModeBar({
   mode,
   approvalThenAutopilot,
   autopilotPlatforms,
-  windowDays,
 }: {
   mode: ContentControlMode;
   approvalThenAutopilot: boolean;
   autopilotPlatforms: ContentPlatform[];
-  windowDays: number;
 }) {
   const [selected, setSelected] = useState<ContentControlMode>(mode);
   const [thenAutopilot, setThenAutopilot] = useState(approvalThenAutopilot);
@@ -95,17 +93,16 @@ export function ControlModeBar({
         <ActionForm action={runAutopilotFillAction} className="card flex flex-wrap items-center gap-3">
           {(state) => (
             <>
-              <input type="hidden" name="windowDays" value={windowDays} />
               <p className="text-sm text-ink-600">
                 Autopilot is set to generate for{" "}
                 <span className="font-medium text-ink-800">
                   {autopilotPlatforms.map((p) => PLATFORM_LABELS[p]).join(", ")}
                 </span>
-                . Fill any empty slots in this {windowDays}-day window right now instead of waiting to click each
-                one:
+                . It keeps the next 7 days topped up automatically, a little at a time — click below to fill any
+                empty slots in those 7 days right now instead of waiting:
               </p>
               <SubmitButton className="btn-secondary px-3 py-1.5 text-sm" pendingLabel="Filling…">
-                Fill this window now
+                Fill next 7 days now
               </SubmitButton>
               <FormError message={state.error} />
             </>

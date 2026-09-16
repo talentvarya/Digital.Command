@@ -1,19 +1,21 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { generateOneSlot, getBrandAndSettings } from "@/app/app/planner/actions";
+import { fillAutopilotBuffer, getBrandAndSettings } from "@/app/app/planner/actions";
 import { checkAutomationAllowed } from "@/lib/automation/guard";
-import { TIME_SLOTS, MONTHLY_AI_GENERATION_SAFETY_CAP } from "@/lib/constants/content";
+import { MONTHLY_AI_GENERATION_SAFETY_CAP } from "@/lib/constants/content";
 import type { ContentControlMode, ContentPlatform } from "@/types/database";
 
-// Runs once a day (see vercel.json) and keeps every Autopilot org's planner
-// filled exactly 2 days ahead — never the whole window at once. Generating
-// a handful of items a day instead of dozens in one burst is what actually
-// keeps this under Unsplash's 50-requests/hour demo limit (see
+// Runs once a day (see vercel.json) and keeps every Autopilot org's rolling
+// content buffer topped up — see fillAutopilotBuffer in
+// app/app/planner/actions.ts for the actual "only refill once the buffer has
+// shrunk to 2 days left, and never generate more than 7 days ahead" logic.
+// Generating a handful of items a day instead of dozens in one burst is what
+// actually keeps this under Unsplash's 50-requests/hour demo limit (see
 // lib/unsplash/client.ts) and spreads AI spend evenly instead of spiking it.
 //
-// The "Fill this week/window now" button (runAutopilotFillAction) is still
-// there for an on-demand catch-up — this cron is the steady background
-// drip, not a replacement for it.
+// The "Fill next 7 days now" button (runAutopilotFillAction) is still there
+// for an on-demand top-up of the same buffer — this cron is the steady
+// background drip that keeps it from ever running dry.
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -26,10 +28,6 @@ export async function GET(request: NextRequest) {
   if (systemSettings?.emergency_freeze) {
     return NextResponse.json({ skipped: "emergency_freeze" });
   }
-
-  const targetDate = new Date();
-  targetDate.setDate(targetDate.getDate() + 2);
-  const dateStr = targetDate.toISOString().slice(0, 10);
 
   const { data: autopilotSettings } = await supabase
     .from("client_settings")
@@ -71,40 +69,27 @@ export async function GET(request: NextRequest) {
       .eq("org_id", orgId)
       .in("generated_by", ["ai", "client_suggestion", "gpt_assistant"])
       .gte("created_at", startOfMonth.toISOString());
-    if ((generationsThisMonth ?? 0) >= MONTHLY_AI_GENERATION_SAFETY_CAP) {
+    const remaining = MONTHLY_AI_GENERATION_SAFETY_CAP - (generationsThisMonth ?? 0);
+    if (remaining <= 0) {
       results.push({ orgId, skipped: "monthly cap reached" });
       continue;
     }
 
-    const { data: existing } = await supabase
-      .from("content_items")
-      .select("platform, scheduled_time")
-      .eq("org_id", orgId)
-      .eq("scheduled_date", dateStr);
-    const filled = new Set((existing ?? []).map((i) => `${i.platform}:${i.scheduled_time ?? TIME_SLOTS[0].value}`));
-
     const { brand } = await getBrandAndSettings(supabase, orgId);
     const controlMode = settings.content_control_mode as ContentControlMode;
 
-    let created = 0;
-    for (const platform of platforms) {
-      for (const slot of TIME_SLOTS) {
-        if (filled.has(`${platform}:${slot.value}`)) continue;
-        const result = await generateOneSlot(supabase, {
-          orgId,
-          userId: owner.user_id as string,
-          platform,
-          scheduledDate: dateStr,
-          controlMode,
-          brand,
-          scheduledTime: slot.value,
-          auditSource: "AUTOPILOT",
-        });
-        if (!("error" in result)) created += 1;
-      }
-    }
-    results.push({ orgId, date: dateStr, created });
+    const { created, bufferDays } = await fillAutopilotBuffer(supabase, {
+      orgId,
+      userId: owner.user_id as string,
+      platforms,
+      controlMode,
+      brand,
+      remainingCap: remaining,
+      auditSource: "AUTOPILOT",
+      force: false,
+    });
+    results.push({ orgId, bufferDaysBeforeRefill: bufferDays, created });
   }
 
-  return NextResponse.json({ date: dateStr, orgs: results });
+  return NextResponse.json({ date: new Date().toISOString().slice(0, 10), orgs: results });
 }

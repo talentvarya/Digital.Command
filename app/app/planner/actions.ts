@@ -9,7 +9,13 @@ import { logAudit } from "@/lib/audit/log";
 import { checkAutomationAllowed, isEmergencyFrozen } from "@/lib/automation/guard";
 import { generateCaption, findAvoidedWords, AiGenerationError } from "@/lib/ai/generate-content";
 import { logAiUsage } from "@/lib/ai/log-usage";
-import { REJECTIONS_BEFORE_SUGGESTION, MONTHLY_AI_GENERATION_SAFETY_CAP, TIME_SLOTS } from "@/lib/constants/content";
+import {
+  REJECTIONS_BEFORE_SUGGESTION,
+  MONTHLY_AI_GENERATION_SAFETY_CAP,
+  TIME_SLOTS,
+  AUTOPILOT_BUFFER_DAYS,
+  AUTOPILOT_REFILL_AT_DAYS,
+} from "@/lib/constants/content";
 import { dispatchToPublisher } from "@/lib/publishing/dispatch";
 import { attachUnsplashPhoto, captionToImageQuery } from "@/lib/unsplash/attach";
 import { getBufferPostStatus } from "@/lib/buffer/client";
@@ -284,14 +290,102 @@ export async function generateAiContentAction(
 }
 
 // ============================================================================
-// Autopilot "Fill this week" — bulk-generates for every (day, platform) in
-// the current 7-day window that doesn't already have a content item, across
-// the platforms the client has selected for Autopilot. Still a click the
-// client initiates (spec's "every content change needs the client's own
-// approval or an explicit Autopilot opt-in" principle — see assistant-chat.ts
-// — is unchanged, just applied to many slots per click instead of one).
+// Shared buffer logic for both the manual "Fill next 7 days" button and the
+// daily Autopilot cron. Autopilot NEVER generates a client's whole planning
+// window (which can be up to 90 days) in one shot — that's what was blowing
+// through Unsplash's 50-requests/hour limit. Instead it keeps a rolling
+// buffer of at most AUTOPILOT_BUFFER_DAYS days of content generated ahead of
+// today. `force: true` (the manual button) fills whatever's missing in that
+// buffer right now; `force: false` (the cron) only tops it up once the
+// buffer has shrunk to AUTOPILOT_REFILL_AT_DAYS or fewer days remaining —
+// either way, it never touches more than AUTOPILOT_BUFFER_DAYS days.
 // ============================================================================
-export async function runAutopilotFillAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
+export async function fillAutopilotBuffer(
+  supabase: SupabaseClient,
+  params: {
+    orgId: string;
+    userId: string;
+    platforms: ContentPlatform[];
+    controlMode: ContentControlMode;
+    brand: BrandProfile | null;
+    remainingCap: number;
+    auditSource?: "CLIENT_MANUAL" | "AUTOPILOT";
+    force?: boolean;
+  }
+): Promise<{ created: number; bufferDays: number; lastError: string | null }> {
+  const { orgId, userId, platforms, controlMode, brand } = params;
+  let remaining = params.remainingCap;
+
+  const days: string[] = [];
+  const today = new Date();
+  for (let i = 0; i < AUTOPILOT_BUFFER_DAYS; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+
+  const { data: existing } = await supabase
+    .from("content_items")
+    .select("platform, scheduled_date, scheduled_time")
+    .eq("org_id", orgId)
+    .gte("scheduled_date", days[0])
+    .lte("scheduled_date", days[days.length - 1]);
+  const filled = new Set(
+    (existing ?? []).map((i) => `${i.scheduled_date}:${i.platform}:${i.scheduled_time ?? TIME_SLOTS[0].value}`)
+  );
+
+  // How many consecutive days, starting today, already have every selected
+  // platform/slot filled — the actual size of the current buffer.
+  let bufferDays = 0;
+  for (const date of days) {
+    const complete = platforms.every((p) => TIME_SLOTS.every((slot) => filled.has(`${date}:${p}:${slot.value}`)));
+    if (!complete) break;
+    bufferDays += 1;
+  }
+
+  if (!params.force && bufferDays > AUTOPILOT_REFILL_AT_DAYS) {
+    return { created: 0, bufferDays, lastError: null };
+  }
+
+  let created = 0;
+  let lastError: string | null = null;
+  for (const date of days) {
+    for (const platform of platforms) {
+      for (const slot of TIME_SLOTS) {
+        if (remaining <= 0) break;
+        if (filled.has(`${date}:${platform}:${slot.value}`)) continue;
+
+        const result = await generateOneSlot(supabase, {
+          orgId,
+          userId,
+          platform,
+          scheduledDate: date,
+          controlMode,
+          brand,
+          scheduledTime: slot.value,
+          auditSource: params.auditSource,
+        });
+        remaining -= 1;
+        if ("error" in result) {
+          lastError = result.error;
+        } else {
+          created += 1;
+        }
+      }
+    }
+  }
+
+  return { created, bufferDays, lastError };
+}
+
+// ============================================================================
+// Autopilot "Fill next 7 days" — a manual, on-demand top-up of the same
+// rolling buffer the daily cron maintains automatically (see
+// fillAutopilotBuffer above and app/api/cron/planner-fill/route.ts). Always
+// capped at AUTOPILOT_BUFFER_DAYS regardless of the client's planning-window
+// selection — Autopilot never bulk-generates a 30/60/90-day window at once.
+// ============================================================================
+export async function runAutopilotFillAction(_prevState: ActionResult, _formData: FormData): Promise<ActionResult> {
   const supabase = createClient();
   const member = await requireOrgMember(supabase);
   if ("error" in member) return member;
@@ -311,29 +405,6 @@ export async function runAutopilotFillAction(_prevState: ActionResult, formData:
   if (controlMode !== "autopilot") return { error: "Switch to Autopilot mode first." };
   if (platforms.length === 0) return { error: "Pick at least one platform for Autopilot to fill first." };
 
-  const requestedWindow = Number(formData.get("windowDays"));
-  const windowDays = requestedWindow > 0 ? requestedWindow : 7;
-
-  const days: string[] = [];
-  const today = new Date();
-  for (let i = 0; i < windowDays; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    days.push(d.toISOString().slice(0, 10));
-  }
-
-  const { data: existing } = await supabase
-    .from("content_items")
-    .select("platform, scheduled_date, scheduled_time")
-    .eq("org_id", orgId)
-    .gte("scheduled_date", days[0])
-    .lte("scheduled_date", days[days.length - 1]);
-  // Slot key includes time so Autopilot can fill both the morning and
-  // evening slot per platform per day, not just one.
-  const filled = new Set(
-    (existing ?? []).map((i) => `${i.scheduled_date}:${i.platform}:${i.scheduled_time ?? TIME_SLOTS[0].value}`)
-  );
-
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
@@ -343,7 +414,7 @@ export async function runAutopilotFillAction(_prevState: ActionResult, formData:
     .eq("org_id", orgId)
     .in("generated_by", ["ai", "client_suggestion", "gpt_assistant"])
     .gte("created_at", startOfMonth.toISOString());
-  let remaining = MONTHLY_AI_GENERATION_SAFETY_CAP - (generationsThisMonth ?? 0);
+  const remaining = MONTHLY_AI_GENERATION_SAFETY_CAP - (generationsThisMonth ?? 0);
   if (remaining <= 0) {
     return {
       error: `Monthly AI generation limit reached (${MONTHLY_AI_GENERATION_SAFETY_CAP}). Contact support to raise it, or add your own content directly.`,
@@ -352,36 +423,20 @@ export async function runAutopilotFillAction(_prevState: ActionResult, formData:
 
   const { brand } = await getBrandAndSettings(supabase, orgId);
 
-  let created = 0;
-  let lastError: string | null = null;
-  for (const date of days) {
-    for (const platform of platforms) {
-      for (const slot of TIME_SLOTS) {
-        if (remaining <= 0) break;
-        if (filled.has(`${date}:${platform}:${slot.value}`)) continue;
-
-        const result = await generateOneSlot(supabase, {
-          orgId,
-          userId,
-          platform,
-          scheduledDate: date,
-          controlMode,
-          brand,
-          scheduledTime: slot.value,
-        });
-        remaining -= 1;
-        if ("error" in result) {
-          lastError = result.error;
-        } else {
-          created += 1;
-        }
-      }
-    }
-  }
+  const { created, lastError } = await fillAutopilotBuffer(supabase, {
+    orgId,
+    userId,
+    platforms,
+    controlMode,
+    brand,
+    remainingCap: remaining,
+    auditSource: "CLIENT_MANUAL",
+    force: true,
+  });
 
   refresh();
   if (created === 0) {
-    return { error: lastError ?? "Nothing to fill — every selected platform already has content for this week." };
+    return { error: lastError ?? `Nothing to fill — the next ${AUTOPILOT_BUFFER_DAYS} days already have content.` };
   }
   return {};
 }

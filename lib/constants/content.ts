@@ -17,6 +17,16 @@ export const TIME_SLOTS: { value: string; label: string }[] = [
 export const PLANNER_WINDOW_OPTIONS = [7, 14, 30, 60, 90] as const;
 export type PlannerWindow = (typeof PLANNER_WINDOW_OPTIONS)[number];
 
+// Autopilot never bulk-generates a client's whole planning window (which can
+// be up to 90 days) in one shot — that's what was blowing through Unsplash's
+// 50-requests/hour limit. Instead it keeps a rolling buffer of at most this
+// many days of content generated ahead of today, and only tops it back up
+// (via the daily cron) once the buffer has shrunk to AUTOPILOT_REFILL_AT_DAYS
+// or fewer days remaining. The manual "Fill next N days" button is capped to
+// the same buffer size for the same reason.
+export const AUTOPILOT_BUFFER_DAYS = 7;
+export const AUTOPILOT_REFILL_AT_DAYS = 2;
+
 export const LINK_TYPE_LABELS: Record<LinkType, string> = {
   website: "Website",
   blog: "Blog",

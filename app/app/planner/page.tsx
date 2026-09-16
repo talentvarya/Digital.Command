@@ -108,7 +108,6 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
         mode={settings?.content_control_mode ?? "approval_required"}
         approvalThenAutopilot={settings?.approval_then_autopilot ?? false}
         autopilotPlatforms={settings?.autopilot_platforms ?? []}
-        windowDays={windowDays}
       />
 
       <div className="space-y-4">
