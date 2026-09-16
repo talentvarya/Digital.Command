@@ -1,73 +1,101 @@
-import { Check } from "lucide-react";
 import type { RoadmapPhase } from "@/types/database";
 
-interface Step {
-  done: boolean;
-  label: string;
-  sub?: string;
+interface JourneyNode {
+  dot: string;
+  bg: string;
+  text: string;
+  border: string;
+  title: string;
+  sub: string;
 }
 
-function Node({ step, index }: { step: Step; index: number }) {
-  return (
-    <div className="flex min-w-0 flex-col items-center text-center">
-      <div
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 font-mono text-sm font-bold ${
-          step.done ? "border-emerald-400 bg-emerald-400/15 text-emerald-300" : "border-cyan-400/50 bg-cyan-400/10 text-cyan-300"
-        }`}
-      >
-        {step.done ? <Check className="h-5 w-5" /> : index}
-      </div>
-      <div className="mt-2 max-w-[110px] text-xs font-semibold leading-snug text-white sm:max-w-[140px]">{step.label}</div>
-      {step.sub && <div className="mt-0.5 font-mono text-[10px] text-white/40">{step.sub}</div>}
-    </div>
-  );
-}
+// Fixed layout for a fixed node count (1 "ready" node + exactly 4 phases,
+// per generate-roadmap.ts's system prompt) — positions tuned by eye, not
+// computed, same as the earlier planning-doc growth diagrams this mirrors.
+const NODE_X = [8, 29, 50, 71, 92];
+const NODE_Y = [80, 62, 44, 26, 12];
+const LABEL_BELOW = [true, true, false, false, false];
 
-// The visual "journey" — a connected line of nodes from "roadmap ready" to
-// each phase, so the same 5 steps the text below spells out in bullets also
-// read at a glance as a single picture. Horizontal on wider screens, a
-// vertical version at phone width where 5 nodes in a row would get too
-// cramped to read.
+const PALETTE = [
+  { dot: "#10b981", bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
+  { dot: "#06b6d4", bg: "bg-cyan-50", text: "text-cyan-700", border: "border-cyan-200" },
+  { dot: "#2a78d6", bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
+  { dot: "#eb6834", bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200" },
+  { dot: "#e11d48", bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200" },
+];
+
+// An ascending "growth" line, not a plain stepper — the same visual
+// language as the planning-doc growth diagrams (colored dot per stage,
+// dashed leader to a tinted label card, line rising left to right). Sits as
+// a bright card inside the otherwise dark /roadmap page, a deliberate
+// contrast for the one chart on the page rather than another dark panel.
 export function RoadmapJourneyDiagram({ phases, readyLabel }: { phases: RoadmapPhase[]; readyLabel: string }) {
-  const steps: Step[] = [
-    { done: true, label: readyLabel },
-    ...phases.map((p) => ({ done: false, label: p.title, sub: p.timeframe })),
+  const nodes: JourneyNode[] = [
+    { ...PALETTE[0], title: readyLabel, sub: "" },
+    ...phases.slice(0, 4).map((p, i) => ({ ...PALETTE[i + 1], title: p.title, sub: p.timeframe })),
   ];
 
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-      {/* Horizontal, sm and up */}
-      <div className="hidden items-start sm:flex">
-        {steps.map((step, i) => (
-          <div key={i} className="flex flex-1 items-start last:flex-none">
-            <Node step={step} index={i + 1} />
-            {i < steps.length - 1 && (
-              <div
-                className={`mt-[22px] h-0.5 flex-1 ${step.done ? "bg-gradient-to-r from-emerald-400 to-cyan-400/60" : "bg-gradient-to-r from-cyan-400/40 to-cyan-400/10"}`}
-              />
-            )}
-          </div>
-        ))}
-      </div>
+  const linePoints = nodes.map((_, i) => `${NODE_X[i]},${NODE_Y[i]}`).join(" ");
 
-      {/* Vertical, below sm */}
-      <div className="space-y-0 sm:hidden">
-        {steps.map((step, i) => (
-          <div key={i} className="flex gap-3">
-            <div className="flex flex-col items-center">
-              <div
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 font-mono text-xs font-bold ${
-                  step.done ? "border-emerald-400 bg-emerald-400/15 text-emerald-300" : "border-cyan-400/50 bg-cyan-400/10 text-cyan-300"
-                }`}
-              >
-                {step.done ? <Check className="h-4 w-4" /> : i + 1}
-              </div>
-              {i < steps.length - 1 && <div className={`w-0.5 flex-1 ${step.done ? "bg-emerald-400/40" : "bg-cyan-400/20"}`} style={{ minHeight: 28 }} />}
-            </div>
-            <div className="pb-4 pt-1.5">
-              <div className="text-sm font-semibold leading-snug text-white">{step.label}</div>
-              {step.sub && <div className="font-mono text-[11px] text-white/40">{step.sub}</div>}
-            </div>
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow-lg sm:p-7">
+      <div className="relative" style={{ paddingBottom: "58%" }}>
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="absolute inset-0 h-full w-full"
+          role="img"
+          aria-label={`Growth journey from ${readyLabel} through ${nodes.length - 1} phases`}
+        >
+          <defs>
+            <marker id="rj-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#2a78d6" />
+            </marker>
+          </defs>
+          <polyline
+            points={linePoints}
+            fill="none"
+            stroke="#2a78d6"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+            markerEnd="url(#rj-arrow)"
+          />
+          {nodes.map((n, i) => {
+            const labelY = LABEL_BELOW[i] ? NODE_Y[i] + 16 : NODE_Y[i] - 16;
+            return (
+              <line
+                key={i}
+                x1={NODE_X[i]}
+                x2={NODE_X[i]}
+                y1={NODE_Y[i]}
+                y2={labelY}
+                stroke={n.dot}
+                strokeOpacity={0.4}
+                strokeWidth="1"
+                strokeDasharray="2 2"
+                vectorEffect="non-scaling-stroke"
+              />
+            );
+          })}
+          {nodes.map((n, i) => (
+            <circle key={i} cx={NODE_X[i]} cy={NODE_Y[i]} r="2.3" fill={n.dot} />
+          ))}
+        </svg>
+
+        {nodes.map((n, i) => (
+          <div
+            key={i}
+            className={`absolute w-[26%] rounded-lg border px-2 py-1.5 text-center sm:w-[22%] ${n.bg} ${n.border}`}
+            style={{
+              left: `${NODE_X[i]}%`,
+              top: `${LABEL_BELOW[i] ? NODE_Y[i] + 20 : NODE_Y[i] - 20}%`,
+              transform: `translate(-50%, ${LABEL_BELOW[i] ? "0%" : "-100%"})`,
+            }}
+          >
+            <div className={`text-[10px] font-bold leading-tight sm:text-xs ${n.text}`}>{n.title}</div>
+            {n.sub && <div className={`text-[9px] leading-tight opacity-80 sm:text-[10px] ${n.text}`}>{n.sub}</div>}
           </div>
         ))}
       </div>
