@@ -19,6 +19,11 @@ export interface RoadmapActionResult {
 // Public — no requireOrgMember, no login. Runs entirely through the
 // service-role client (see 0025's RLS comment for why that's actually
 // stricter than an anon-insert policy here, not looser).
+//
+// Wrapped so an unexpected failure (a bad env var, a transient AI/DB error)
+// never surfaces Next.js's generic "server-side exception" crash page to a
+// visitor mid-pitch — it logs server-side and shows a plain retry message
+// instead, same non-fatal-logging discipline as logAudit/logAiUsage.
 export async function generateRoadmapLeadAction(
   _prevState: RoadmapActionResult,
   formData: FormData
@@ -26,9 +31,8 @@ export async function generateRoadmapLeadAction(
   try {
     return await handleGenerateRoadmapLead(formData);
   } catch (err) {
-    // TEMPORARY: surface the real message while diagnosing a live bug —
-    // narrow this back down once the root cause is confirmed and fixed.
-    return { error: err instanceof Error ? `DEBUG: ${err.message}` : "DEBUG: unknown error" };
+    console.error("roadmap lead generation failed", err);
+    return { error: "Kuch gadbad ho gayi — ek baar phir try karein." };
   }
 }
 
