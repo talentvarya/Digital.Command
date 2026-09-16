@@ -1,5 +1,6 @@
 import { generateText } from "@/lib/ai/provider";
 import { estimateAiCostUsd } from "@/lib/constants/ai-pricing";
+import { AiGenerationError } from "@/lib/ai/client";
 import type { AiUsage } from "@/lib/ai/log-usage";
 import type { RoadmapPhase } from "@/types/database";
 
@@ -65,10 +66,18 @@ export async function generateRoadmap(input: RoadmapLeadInput): Promise<Generate
     `Products/services/offers: ${input.productsOffers || "not given"}`,
   ];
 
-  const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 1024 });
+  // 2048, not the 256-512 other draft-* call sites use — this response has
+  // to carry 4 full phases plus vision/urgency copy, and a truncated
+  // response is invalid JSON, not just short.
+  const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 2048 });
 
   const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  } catch {
+    throw new AiGenerationError("Couldn't generate a clean roadmap that time — please try again.");
+  }
 
   return {
     currentState: Array.isArray(parsed.currentState) ? parsed.currentState : [],
