@@ -36,6 +36,8 @@ const STATUS_STYLES: Record<string, string> = {
   needs_reply: "bg-amber-100 text-amber-800",
   drafted: "bg-brand-100 text-brand-700",
   posted: "bg-emerald-100 text-emerald-800",
+  converted: "bg-emerald-100 text-emerald-800",
+  not_interested: "bg-slate-200 text-slate-800",
 };
 
 const STATUS_LABELS: Record<string, string> = {

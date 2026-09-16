@@ -582,3 +582,45 @@ export interface ReviewRequest {
   created_by: string | null;
   created_at: string;
 }
+
+// ============================================================================
+// Public roadmap lead magnet — VMG's own top-of-funnel sales CRM, not a
+// client-facing Digital Command feature. See supabase/migrations/0024-0025.
+// ============================================================================
+export type LeadStatus = "new" | "contacted" | "converted" | "not_interested";
+
+export interface RoadmapPhase {
+  title: string;
+  timeframe: string;
+  points: string[];
+}
+
+export interface RoadmapLead {
+  id: string;
+  business_name: string;
+  contact_name: string;
+  contact_phone: string;
+  contact_email: string | null;
+  industry: string | null;
+  city: string | null;
+  current_website: string | null;
+  current_social: string | null;
+  current_reviews: string | null;
+  current_marketing: string | null;
+  primary_goal: string | null;
+  timeline: string | null;
+  budget_range: string | null;
+  target_audience: string | null;
+  competitors: string | null;
+  brand_tone: string | null;
+  products_offers: string | null;
+  roadmap_current_state: string[];
+  roadmap_phases: RoadmapPhase[];
+  roadmap_vision: string | null;
+  roadmap_urgency_line: string | null;
+  estimated_ai_cost_usd: number;
+  status: LeadStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}

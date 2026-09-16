@@ -171,4 +171,21 @@ Not in the original master spec's 7 phases — added after researching what GoHi
 
 **Explicit non-goal, and why:** no automated review pulling or automated posting. Real Google review data/posting needs Google Business Profile API access — a 60+ day verified profile, a formal access request, and rejections are common — the exact same external gate that's already blocked Local SEO/GBP since Phase 4 (see that section above). Rather than wait on that gate to start anything, this phase is scoped to what's genuinely buildable today: request tracking + manual review logging + AI-drafted replies, all sent/posted through the client's own accounts — the identical "draft here, send yourself" discipline Phase 5's outreach already established. Revisit real GBP-integrated posting once that access clears.
 
-Schema: `supabase/migrations/0022_phase8_reputation_schema.sql` + `0023_phase8_reputation_rls.sql` (not yet applied to the live project as of this writing — run manually in the Supabase SQL Editor).
+Schema: `supabase/migrations/0022_phase8_reputation_schema.sql` + `0023_phase8_reputation_rls.sql` (applied to the live project).
+
+## Phase 9 — Public Roadmap Lead Magnet (VMG's own sales tool, not a client-facing product feature)
+
+A free, public, unauthenticated page at `/roadmap` (linked from the homepage) — a visitor fills in their business details, an AI generates a personalized 90-day growth roadmap on the spot (current-gaps bullets, 4 phases, an aspirational "vision" section, one urgency line), and their contact info + answers are saved as a sales lead for VMG's own Super Admin to follow up on from a new `/admin/leads` page. This has nothing to do with any client org — it's VMG's own top-of-funnel CRM, sitting entirely outside the authenticated client/admin product.
+
+**Exit criteria met:**
+- A visitor with no account can fill the form and get a real AI-generated roadmap immediately, no login/payment anywhere in the flow.
+- The roadmap never promises a guaranteed outcome/number/ranking — same "aspirational, not guaranteed" discipline as every other AI-generation call site (`generate-report.ts`, `draft-outreach.ts`).
+- Every submission is saved with full contact info + answers + the generated roadmap; Super Admin can view, and set status (new/contacted/converted/not_interested) with notes, from `/admin/leads`.
+- A daily generation cap (`DAILY_ROADMAP_CAP` in `app/roadmap/actions.ts`) and a honeypot field guard against cost/spam abuse on a public, unauthenticated AI-calling form.
+- `npm run lint` and `npm run build` stay clean.
+
+**Security note, since this is the first genuinely public write path besides `conversion_events`'s anon-insert click route:** writes run through the service-role client inside a Server Action rather than an anon RLS insert policy — `roadmap_leads` has no insert policy for any client-facing role at all, only Super-Admin select/update. Stricter than the `conversion_events` pattern, appropriate here since this write happens inside trusted server code rather than a bare public redirect.
+
+**Open item:** the "Call now"/"WhatsApp now" buttons on the generated roadmap read `NEXT_PUBLIC_VMG_WHATSAPP_NUMBER`/`NEXT_PUBLIC_VMG_PHONE`, both unset as of this writing — falls back to a `mailto:hello@visionarymastersglobal.com` link until VMG's real number is added to `.env.local`/Vercel.
+
+Schema: `supabase/migrations/0024_phase9_roadmap_leads_schema.sql` + `0025_phase9_roadmap_leads_rls.sql` (not yet applied to the live project as of this writing — run manually in the Supabase SQL Editor).

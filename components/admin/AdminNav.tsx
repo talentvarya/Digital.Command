@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Wallet, LogOut } from "lucide-react";
+import { LayoutDashboard, Wallet, LogOut, Radar } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { createClient } from "@/lib/supabase/client";
 
@@ -43,6 +43,15 @@ export function AdminNav() {
             >
               <Wallet className="h-4 w-4" />
               Costs
+            </Link>
+            <Link
+              href="/admin/leads"
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium ${
+                pathname.startsWith("/admin/leads") ? "bg-brand-50 text-brand-700" : "text-ink-600 hover:bg-ink-50"
+              }`}
+            >
+              <Radar className="h-4 w-4" />
+              Leads
             </Link>
           </nav>
         </div>

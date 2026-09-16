@@ -329,6 +329,26 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Free roadmap lead magnet */}
+      <section className="bg-white py-20">
+        <div className="mx-auto max-w-4xl px-4 text-center sm:px-6">
+          <span className="mb-3 inline-block rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-700">
+            Free — no card, no login
+          </span>
+          <h2 className="font-display text-3xl font-bold tracking-tight text-ink-900">
+            Not sure where to start? Get your free growth roadmap
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm text-ink-500">
+            Answer a few questions about your business and our AI builds you a personalized 90-day marketing roadmap
+            on the spot — see exactly what to do next before you talk to us.
+          </p>
+          <Link href="/roadmap" className="btn-primary mt-6 inline-flex px-6 py-3 text-base">
+            Get My Free Roadmap
+            <ArrowRight className="ml-1.5 inline h-4 w-4" />
+          </Link>
+        </div>
+      </section>
+
       <PricingSection />
 
       {/* Trust & safety */}
