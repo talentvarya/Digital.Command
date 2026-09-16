@@ -4,7 +4,7 @@ import { ActionForm } from "@/components/ActionForm";
 import { FormError } from "@/components/FormError";
 import { SubmitButton } from "@/components/SubmitButton";
 import { generateReportAction } from "@/app/app/reports/actions";
-import { REPORT_PERIOD_DAYS } from "@/lib/constants/google";
+import { REPORT_PERIOD_DAYS, REPORT_PERIOD_LABELS } from "@/lib/constants/google";
 
 export function GenerateReportForm() {
   return (
@@ -18,7 +18,7 @@ export function GenerateReportForm() {
             <select id="periodDays" name="periodDays" className="field-input" defaultValue="14">
               {REPORT_PERIOD_DAYS.map((days) => (
                 <option key={days} value={days}>
-                  Last {days} days
+                  {REPORT_PERIOD_LABELS[days]}
                 </option>
               ))}
             </select>
