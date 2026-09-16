@@ -150,6 +150,8 @@ export interface ClientSettings {
   manual_storage_cost_usd: number | null;
   manual_other_cost_usd: number | null;
   manual_other_cost_label: string | null;
+  google_review_link: string | null;
+  facebook_review_link: string | null;
 }
 
 export interface SystemSettings {
@@ -503,7 +505,8 @@ export type AiUsageFeature =
   | "opportunity_assessment"
   | "outreach_draft"
   | "campaign_brief"
-  | "assistant_chat";
+  | "assistant_chat"
+  | "review_reply_draft";
 
 // The AI Assistant (assistant-chat.ts) always uses "anthropic" regardless of
 // AI_PROVIDER — see lib/ai/provider.ts and assistant-tools.ts's pinned
@@ -544,5 +547,38 @@ export interface ConversionEvent {
   utm_medium: string | null;
   utm_campaign: string | null;
   notes: string | null;
+  created_at: string;
+}
+
+export type ReviewPlatform = "google" | "facebook" | "other";
+export type ReplyStatus = "needs_reply" | "drafted" | "posted";
+
+export interface Review {
+  id: string;
+  org_id: string;
+  platform: ReviewPlatform;
+  reviewer_name: string | null;
+  rating: number | null;
+  review_text: string | null;
+  review_date: string | null;
+  ai_reply_draft: string | null;
+  reply_status: ReplyStatus;
+  replied_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ReviewRequestChannel = "whatsapp" | "sms" | "email";
+
+export interface ReviewRequest {
+  id: string;
+  org_id: string;
+  contact_name: string;
+  contact_phone: string | null;
+  contact_email: string | null;
+  channel: ReviewRequestChannel;
+  message_sent: string;
+  created_by: string | null;
   created_at: string;
 }

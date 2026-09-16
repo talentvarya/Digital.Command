@@ -11,6 +11,7 @@ import {
   Sparkles,
   HeartPulse,
   MousePointerClick,
+  Star,
   Package,
   CalendarClock,
   Hourglass,
@@ -139,6 +140,7 @@ export default async function ClientDashboardPage() {
           <ModuleLinkCard icon={Search} title="SEO" subtitle="Technical audit, Search Console & Analytics & YouTube connections, keyword tracking" href="/app/seo" color={MODULE_COLORS.yellow} />
           <ModuleLinkCard icon={FileBarChart} title="Reports" subtitle="Real data, AI-written summary — pick 7 days to 12 months" href="/app/reports" color={MODULE_COLORS.blue} />
           <ModuleLinkCard icon={Handshake} title="Off-Page & Outreach" subtitle="Brand mentions, opportunity assessment, personalized outreach, backlink checks" href="/app/outreach" color={MODULE_COLORS.red} />
+          <ModuleLinkCard icon={Star} title="Reputation Management" subtitle="Send review requests, log reviews, AI-drafted replies you post yourself" href="/app/reputation" color={MODULE_COLORS.yellow} />
           <ModuleLinkCard icon={Megaphone} title="Paid Advertising" subtitle="AI-drafted campaign briefs, your budget, your approval — launch always stays manual" href="/app/paid-campaigns" color={MODULE_COLORS.orange} />
           <ModuleLinkCard icon={Sparkles} title="AI Assistant" subtitle="Ask about your report, edit or skip a post, draft something new" href="/app/assistant" color={MODULE_COLORS.yellow} />
           <ModuleLinkCard icon={MousePointerClick} title="Conversions" subtitle="Trackable WhatsApp/call/form links plus a real Google Organic → Sales funnel" href="/app/conversions" color={MODULE_COLORS.blue} />

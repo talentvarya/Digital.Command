@@ -158,3 +158,17 @@ Kimi added first, at the user's explicit request once they had a real Moonshot A
 One deliberate scope cut, applying equally to all three additions: the **AI Assistant does not get a non-Claude option**. Its tool-use loop (`runAssistantChat`, `lib/ai/assistant-chat.ts`) is built directly on Anthropic's `ToolUseBlock`/`tool_result` content-block shape, which has no structural equivalent in any of the other three providers' own tool-calling conventions (Kimi and OpenAI each use their own, mutually different, OpenAI-style `tool_calls` shapes; Gemini uses a distinct `functionCall`/`functionResponse` convention) — porting it would mean maintaining four separate state machines for one feature, real scope beyond what was asked for here. The assistant's `regenerate_content` tool (its one indirect path into the shared caption-generation code) is explicitly pinned to `{provider: "anthropic"}` regardless of the global `AI_PROVIDER` setting, specifically so this stays true no matter which provider the rest of the app is switched to — otherwise a single assistant turn could blend another provider's token usage into an Anthropic-priced cost log, which can't be attributed correctly. Full technical detail in `ARCHITECTURE.md`'s "AI Provider Abstraction" section; live-verification status in `BUILD_PROGRESS.md`.
 
 Also carried over from the Kimi decision, unchanged for Gemini/OpenAI: `AI_PROVIDER` stays **one global switch for the whole deployment**, not a per-org/per-client selector — nobody asked for that, and a settings surface for choosing among 4 providers per client would be new scope this build wasn't asked to take on.
+
+## Phase 8 — Reputation Management (post-spec, first of the "best of best" roadmap)
+
+Not in the original master spec's 7 phases — added after researching what GoHighLevel/BrightLocal/HubSpot bundle in 2026 and picking the single highest-leverage gap: reviews are the #1 thing a local-business owner already asks an agency for (see the Value Map / Fayda Map artifacts from this planning pass).
+
+**Exit criteria met:**
+- A client can save their own Google review link and Facebook review page link.
+- A client can log a review request (name, phone/email, channel) — Digital Command builds the pre-filled WhatsApp/SMS/email message and opens it in the client's own app; nothing is sent by the platform itself.
+- A client can log a review they received (platform, rating, reviewer, text) and get an AI-drafted reply, which they copy and post themselves, then mark posted.
+- `npm run lint` and `npm run build` stay clean.
+
+**Explicit non-goal, and why:** no automated review pulling or automated posting. Real Google review data/posting needs Google Business Profile API access — a 60+ day verified profile, a formal access request, and rejections are common — the exact same external gate that's already blocked Local SEO/GBP since Phase 4 (see that section above). Rather than wait on that gate to start anything, this phase is scoped to what's genuinely buildable today: request tracking + manual review logging + AI-drafted replies, all sent/posted through the client's own accounts — the identical "draft here, send yourself" discipline Phase 5's outreach already established. Revisit real GBP-integrated posting once that access clears.
+
+Schema: `supabase/migrations/0022_phase8_reputation_schema.sql` + `0023_phase8_reputation_rls.sql` (not yet applied to the live project as of this writing — run manually in the Supabase SQL Editor).
