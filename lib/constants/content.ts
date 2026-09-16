@@ -14,6 +14,9 @@ export const TIME_SLOTS: { value: string; label: string }[] = [
   { value: "18:00", label: "Evening (6:00 PM)" },
 ];
 
+export const PLANNER_WINDOW_OPTIONS = [7, 14, 30, 60, 90] as const;
+export type PlannerWindow = (typeof PLANNER_WINDOW_OPTIONS)[number];
+
 export const LINK_TYPE_LABELS: Record<LinkType, string> = {
   website: "Website",
   blog: "Blog",

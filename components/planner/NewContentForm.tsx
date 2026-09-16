@@ -9,6 +9,38 @@ import { generateAiContentAction, createManualContentAction } from "@/app/app/pl
 import { PLATFORM_LABELS, TIME_SLOTS } from "@/lib/constants/content";
 import type { ContentPlatform } from "@/types/database";
 
+const CUSTOM_TIME = "custom";
+
+// Morning/Evening presets plus a free-form time for anyone who wants an
+// exact slot — only one "scheduledTime" field is ever rendered, so the
+// submitted value is always unambiguous.
+function TimeSlotPicker() {
+  const [choice, setChoice] = useState<string>(TIME_SLOTS[0].value);
+
+  return (
+    <div>
+      <label className="field-label">Time</label>
+      <select
+        className="field-input"
+        value={choice}
+        onChange={(e) => setChoice(e.target.value)}
+      >
+        {TIME_SLOTS.map((slot) => (
+          <option key={slot.value} value={slot.value}>
+            {slot.label}
+          </option>
+        ))}
+        <option value={CUSTOM_TIME}>Custom time…</option>
+      </select>
+      {choice === CUSTOM_TIME ? (
+        <input type="time" name="scheduledTime" className="field-input mt-2" required />
+      ) : (
+        <input type="hidden" name="scheduledTime" value={choice} />
+      )}
+    </div>
+  );
+}
+
 export function NewContentForm({ date }: { date: string }) {
   const [mode, setMode] = useState<"ai" | "manual" | null>(null);
 
@@ -41,16 +73,7 @@ export function NewContentForm({ date }: { date: string }) {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="field-label">Time</label>
-              <select name="scheduledTime" className="field-input" defaultValue={TIME_SLOTS[0].value}>
-                {TIME_SLOTS.map((slot) => (
-                  <option key={slot.value} value={slot.value}>
-                    {slot.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <TimeSlotPicker />
             <SubmitButton className="btn-primary px-3 py-2 text-sm" pendingLabel="Generating…">
               Generate
             </SubmitButton>
@@ -81,16 +104,7 @@ export function NewContentForm({ date }: { date: string }) {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="field-label">Time</label>
-              <select name="scheduledTime" className="field-input" defaultValue={TIME_SLOTS[0].value}>
-                {TIME_SLOTS.map((slot) => (
-                  <option key={slot.value} value={slot.value}>
-                    {slot.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <TimeSlotPicker />
             <div>
               <label className="field-label">Image / video (optional)</label>
               <input className="field-input" type="file" name="media" accept="image/*,video/*" />

@@ -2,14 +2,16 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ControlModeBar } from "@/components/planner/ControlModeBar";
 import { DayCard } from "@/components/planner/DayCard";
+import { WindowSelector } from "@/components/planner/WindowSelector";
+import { PLANNER_WINDOW_OPTIONS, type PlannerWindow } from "@/lib/constants/content";
 import type { ContentMedia, ContentVersion } from "@/types/database";
 
 export type ContentMediaWithUrl = ContentMedia & { signedUrl: string | null };
 
-function nextSevenDays(): string[] {
+function nextNDays(n: number): string[] {
   const days: string[] = [];
   const today = new Date();
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < n; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     days.push(d.toISOString().slice(0, 10));
@@ -17,7 +19,7 @@ function nextSevenDays(): string[] {
   return days;
 }
 
-export default async function PlannerPage() {
+export default async function PlannerPage({ searchParams }: { searchParams: { days?: string } }) {
   const supabase = createClient();
   const {
     data: { user },
@@ -31,7 +33,12 @@ export default async function PlannerPage() {
     .maybeSingle();
   if (!membership) redirect("/register/details");
 
-  const days = nextSevenDays();
+  const requestedWindow = Number(searchParams.days);
+  const windowDays: PlannerWindow = PLANNER_WINDOW_OPTIONS.includes(requestedWindow as PlannerWindow)
+    ? (requestedWindow as PlannerWindow)
+    : 7;
+
+  const days = nextNDays(windowDays);
 
   const [{ data: settings }, { data: items }] = await Promise.all([
     supabase
@@ -86,18 +93,22 @@ export default async function PlannerPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="mb-1 text-2xl font-bold text-ink-900">7-Day Content Planner</h1>
-        <p className="text-sm text-ink-500">
-          Content reaches <span className="font-medium text-ink-700">&quot;Scheduled&quot;</span> here — actual
-          publishing to Facebook/Instagram/YouTube arrives in a later phase.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="mb-1 text-2xl font-bold text-ink-900">Content Planner</h1>
+          <p className="text-sm text-ink-500">
+            Content reaches <span className="font-medium text-ink-700">&quot;Scheduled&quot;</span> here — actual
+            publishing to Facebook/Instagram/YouTube arrives in a later phase.
+          </p>
+        </div>
+        <WindowSelector current={windowDays} />
       </div>
 
       <ControlModeBar
         mode={settings?.content_control_mode ?? "approval_required"}
         approvalThenAutopilot={settings?.approval_then_autopilot ?? false}
         autopilotPlatforms={settings?.autopilot_platforms ?? []}
+        windowDays={windowDays}
       />
 
       <div className="space-y-4">

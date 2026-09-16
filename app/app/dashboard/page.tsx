@@ -124,7 +124,7 @@ export default async function ClientDashboardPage() {
         <h2 className="mb-3 text-lg font-semibold text-ink-900">Modules</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <ModuleLinkCard icon={Palette} title="Brand Brain" subtitle="Voice, visuals & guardrails for AI content" href="/app/brand" color={CHART_COLORS.violet} />
-          <ModuleLinkCard icon={ClipboardList} title="7-Day Content Planner" subtitle="Generate, review, approve — publishes automatically via Buffer/YouTube once scheduled" href="/app/planner" color={CHART_COLORS.blue} />
+          <ModuleLinkCard icon={ClipboardList} title="Content Planner" subtitle="Generate, review, approve — publishes automatically via Buffer/YouTube once scheduled" href="/app/planner" color={CHART_COLORS.blue} />
           <ModuleLinkCard icon={Link2} title="Website & Channel Connections" subtitle="Add links, check they're reachable" href="/app/links" color={CHART_COLORS.magenta} />
           <ModuleLinkCard icon={Search} title="SEO" subtitle="Technical audit, Search Console & Analytics & YouTube connections, keyword tracking" href="/app/seo" color={CHART_COLORS.aqua} />
           <ModuleLinkCard icon={FileBarChart} title="Reports" subtitle="Real data, AI-written summary — every 7 or 14 days" href="/app/reports" color={CHART_COLORS.aqua} />

@@ -285,7 +285,7 @@ export async function generateAiContentAction(
 // approval or an explicit Autopilot opt-in" principle — see assistant-chat.ts
 // — is unchanged, just applied to many slots per click instead of one).
 // ============================================================================
-export async function runAutopilotFillAction(_prevState: ActionResult, _formData: FormData): Promise<ActionResult> {
+export async function runAutopilotFillAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
   const supabase = createClient();
   const member = await requireOrgMember(supabase);
   if ("error" in member) return member;
@@ -305,9 +305,12 @@ export async function runAutopilotFillAction(_prevState: ActionResult, _formData
   if (controlMode !== "autopilot") return { error: "Switch to Autopilot mode first." };
   if (platforms.length === 0) return { error: "Pick at least one platform for Autopilot to fill first." };
 
+  const requestedWindow = Number(formData.get("windowDays"));
+  const windowDays = requestedWindow > 0 ? requestedWindow : 7;
+
   const days: string[] = [];
   const today = new Date();
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < windowDays; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     days.push(d.toISOString().slice(0, 10));
