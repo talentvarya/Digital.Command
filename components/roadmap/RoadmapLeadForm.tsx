@@ -5,6 +5,7 @@ import { useFormState, useFormStatus } from "react-dom";
 import { MessageCircle, Phone, Sparkles, CheckCircle2, Radar } from "lucide-react";
 import { generateRoadmapLeadAction, type RoadmapActionResult } from "@/app/roadmap/actions";
 import { ROADMAP_COPY, type RoadmapLanguage } from "@/lib/i18n/roadmap";
+import { RoadmapJourneyDiagram } from "@/components/roadmap/RoadmapJourneyDiagram";
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_VMG_WHATSAPP_NUMBER || "";
 const PHONE_NUMBER = process.env.NEXT_PUBLIC_VMG_PHONE || "";
@@ -184,18 +185,17 @@ function RoadmapResult({ lead, language }: { lead: NonNullable<RoadmapActionResu
         </div>
       )}
 
-      {/* Progress / remaining steps */}
-      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
-        <div className="mb-2 flex items-center justify-between text-sm">
+      {/* Journey diagram — the same steps the cards below spell out in
+          bullets, as one connected picture: done → each phase in order. */}
+      <div>
+        <div className="mb-3 flex items-center justify-between text-sm">
           <span className="font-semibold text-white">{t.progressHeading}</span>
           <span className="font-mono text-cyan-300">
             {doneSteps}/{totalSteps} {t.progressStepsLabel}
           </span>
         </div>
-        <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/10">
-          <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-brand-400" style={{ width: `${(doneSteps / totalSteps) * 100}%` }} />
-        </div>
-        <p className="mt-2 text-sm text-white/60">{t.progressSub(remaining)}</p>
+        <RoadmapJourneyDiagram phases={lead.roadmap_phases} readyLabel={t.roadmapReadyLabel} />
+        <p className="mt-3 text-sm text-white/60">{t.progressSub(remaining)}</p>
       </div>
 
       <div className="space-y-3">
