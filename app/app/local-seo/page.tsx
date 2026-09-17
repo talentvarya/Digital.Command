@@ -26,11 +26,20 @@ export default async function LocalSeoPage() {
   if (!membership) redirect("/register/details");
   const orgId = membership.org_id;
 
-  const [{ data: profile }, { data: brand }, { data: posts }] = await Promise.all([
-    supabase.from("local_seo_profiles").select("*").eq("org_id", orgId).maybeSingle(),
-    supabase.from("brand_profiles").select("phone, whatsapp, locations").eq("org_id", orgId).maybeSingle(),
-    supabase.from("local_seo_posts").select("*").eq("org_id", orgId).order("created_at", { ascending: false }),
-  ]);
+  // TEMPORARY debug wrapper — remove once the 500 on this route is diagnosed.
+  let profileRes, brandRes, postsRes;
+  try {
+    [profileRes, brandRes, postsRes] = await Promise.all([
+      supabase.from("local_seo_profiles").select("*").eq("org_id", orgId).maybeSingle(),
+      supabase.from("brand_profiles").select("phone, whatsapp, locations").eq("org_id", orgId).maybeSingle(),
+      supabase.from("local_seo_posts").select("*").eq("org_id", orgId).order("created_at", { ascending: false }),
+    ]);
+  } catch (err) {
+    return <pre style={{ color: "red", padding: 20 }}>DEBUG QUERY THROW: {err instanceof Error ? err.stack : String(err)}</pre>;
+  }
+  const { data: profile } = profileRes;
+  const { data: brand } = brandRes;
+  const { data: posts } = postsRes;
 
   const localProfile = (profile as LocalSeoProfile | null) ?? null;
   const postList = (posts as LocalSeoPost[] | null) ?? [];
