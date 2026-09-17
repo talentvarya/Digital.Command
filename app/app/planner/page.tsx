@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ControlModeBar } from "@/components/planner/ControlModeBar";
 import { DayCard } from "@/components/planner/DayCard";
 import { WindowSelector } from "@/components/planner/WindowSelector";
+import { ClearPlannerButton } from "@/components/planner/ClearPlannerButton";
 import { PLANNER_WINDOW_OPTIONS, type PlannerWindow } from "@/lib/constants/content";
 import type { ContentMedia, ContentVersion } from "@/types/database";
 
@@ -101,7 +102,10 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
             publishing to Facebook/Instagram/YouTube arrives in a later phase.
           </p>
         </div>
-        <WindowSelector current={windowDays} />
+        <div className="flex flex-col items-end gap-2">
+          <WindowSelector current={windowDays} />
+          <ClearPlannerButton startDate={days[0]} endDate={days[days.length - 1]} windowLabel={`${windowDays}-day`} />
+        </div>
       </div>
 
       <ControlModeBar

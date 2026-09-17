@@ -880,6 +880,48 @@ export async function restoreContentVersionAction(_prevState: ActionResult, form
   return {};
 }
 
+// ============================================================================
+// Bulk-clear the currently viewed planning window — for a client who wants to
+// wipe a batch of drafted/scheduled posts and start over. Deliberately safe
+// in two ways: it skips locked items (same guard as the single-item delete
+// above) rather than failing the whole batch, and it never touches an item
+// whose publish_status is already 'sent' — that's real publish history, not
+// a draft, and deleting it here would be indistinguishable from actual data
+// loss for content that may already be live on Facebook/Instagram/YouTube.
+// ============================================================================
+export async function clearPlannerAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
+  const supabase = createClient();
+  const member = await requireOrgMember(supabase);
+  if ("error" in member) return member;
+
+  const startDate = formData.get("startDate") as string;
+  const endDate = formData.get("endDate") as string;
+  if (!startDate || !endDate) return { error: "Missing date range." };
+
+  const { data: deleted, error } = await supabase
+    .from("content_items")
+    .delete()
+    .eq("org_id", member.orgId)
+    .gte("scheduled_date", startDate)
+    .lte("scheduled_date", endDate)
+    .eq("locked", false)
+    .neq("publish_status", "sent")
+    .select("id");
+  if (error) return { error: error.message };
+
+  await logAudit(supabase, {
+    orgId: member.orgId,
+    actorUserId: member.userId,
+    actorRole: "client_owner",
+    source: "CLIENT_MANUAL",
+    actionType: "planner_cleared",
+    newState: { count: deleted?.length ?? 0, startDate, endDate },
+  });
+
+  refresh();
+  return {};
+}
+
 export async function setControlModeAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
   const supabase = createClient();
   const member = await requireOrgMember(supabase);
