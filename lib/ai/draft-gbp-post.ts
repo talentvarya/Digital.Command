@@ -1,4 +1,5 @@
 import { generateText } from "@/lib/ai/provider";
+import { AiGenerationError } from "@/lib/ai/client";
 import type { AiUsage } from "@/lib/ai/log-usage";
 import type { BrandProfile, LocalSeoProfile } from "@/types/database";
 
@@ -30,10 +31,15 @@ export async function draftGbpPost(params: {
   if (cityParts.length) lines.push(`Location: ${cityParts.join(", ")}`);
   if (localSeoProfile?.gbp_category) lines.push(`GBP category: ${localSeoProfile.gbp_category}`);
 
-  const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 512 });
+  const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 768 });
 
   const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  } catch {
+    throw new AiGenerationError("Couldn't generate a clean post that time — please try again.");
+  }
   return {
     postText: typeof parsed.postText === "string" ? parsed.postText : result.text.trim(),
     keywordSuggestions: Array.isArray(parsed.keywordSuggestions) ? parsed.keywordSuggestions.filter((k: unknown) => typeof k === "string") : [],

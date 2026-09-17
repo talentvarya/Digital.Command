@@ -1,4 +1,5 @@
 import { generateText } from "@/lib/ai/provider";
+import { AiGenerationError } from "@/lib/ai/client";
 import type { AiUsage } from "@/lib/ai/log-usage";
 import type { AeoFinding, BrandProfile } from "@/types/database";
 
@@ -33,10 +34,15 @@ export async function draftAeoFaq(params: {
   lines.push("Gaps found on the current site (address these first):");
   gaps.forEach((g) => lines.push(`- [${g.area}] ${g.message}`));
 
-  const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 768 });
+  const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 1024 });
 
   const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  } catch {
+    throw new AiGenerationError("Couldn't generate clean FAQ content that time — please try again.");
+  }
   return {
     faqDraft: typeof parsed.faqDraft === "string" ? parsed.faqDraft : result.text.trim(),
     usage: result.usage,

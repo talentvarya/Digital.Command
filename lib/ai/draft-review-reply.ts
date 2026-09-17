@@ -1,4 +1,5 @@
 import { generateText } from "@/lib/ai/provider";
+import { AiGenerationError } from "@/lib/ai/client";
 import type { AiUsage } from "@/lib/ai/log-usage";
 import type { BrandProfile, Review } from "@/types/database";
 
@@ -40,7 +41,12 @@ export async function draftReviewReply(params: {
   const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 256 });
 
   const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  } catch {
+    throw new AiGenerationError("Couldn't generate a clean reply that time — please try again.");
+  }
   return {
     reply: typeof parsed.reply === "string" ? parsed.reply : result.text.trim(),
     usage: result.usage,
