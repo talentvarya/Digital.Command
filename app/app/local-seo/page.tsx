@@ -11,7 +11,7 @@ import { draftGbpPostAction } from "@/app/app/local-seo/actions";
 import { LOCAL_CITATION_DIRECTORIES } from "@/lib/constants/local-seo";
 import type { LocalSeoPost, LocalSeoProfile } from "@/types/database";
 
-export default async function LocalSeoPage() {
+async function LocalSeoPageInner() {
   const supabase = createClient();
   const {
     data: { user },
@@ -26,20 +26,11 @@ export default async function LocalSeoPage() {
   if (!membership) redirect("/register/details");
   const orgId = membership.org_id;
 
-  // TEMPORARY debug wrapper — remove once the 500 on this route is diagnosed.
-  let profileRes, brandRes, postsRes;
-  try {
-    [profileRes, brandRes, postsRes] = await Promise.all([
-      supabase.from("local_seo_profiles").select("*").eq("org_id", orgId).maybeSingle(),
-      supabase.from("brand_profiles").select("phone, whatsapp, locations").eq("org_id", orgId).maybeSingle(),
-      supabase.from("local_seo_posts").select("*").eq("org_id", orgId).order("created_at", { ascending: false }),
-    ]);
-  } catch (err) {
-    return <pre style={{ color: "red", padding: 20 }}>DEBUG QUERY THROW: {err instanceof Error ? err.stack : String(err)}</pre>;
-  }
-  const { data: profile } = profileRes;
-  const { data: brand } = brandRes;
-  const { data: posts } = postsRes;
+  const [{ data: profile }, { data: brand }, { data: posts }] = await Promise.all([
+    supabase.from("local_seo_profiles").select("*").eq("org_id", orgId).maybeSingle(),
+    supabase.from("brand_profiles").select("phone, whatsapp, locations").eq("org_id", orgId).maybeSingle(),
+    supabase.from("local_seo_posts").select("*").eq("org_id", orgId).order("created_at", { ascending: false }),
+  ]);
 
   const localProfile = (profile as LocalSeoProfile | null) ?? null;
   const postList = (posts as LocalSeoPost[] | null) ?? [];
@@ -116,4 +107,20 @@ export default async function LocalSeoPage() {
       </div>
     </div>
   );
+}
+
+// TEMPORARY debug wrapper — remove once the live 500 on this route is
+// diagnosed (the inner function's own query try/catch never fired, so the
+// throw is somewhere else in this component's render path).
+export default async function LocalSeoPage() {
+  try {
+    return await LocalSeoPageInner();
+  } catch (err: any) {
+    if (err?.digest?.startsWith?.("NEXT_REDIRECT")) throw err;
+    return (
+      <pre style={{ color: "red", padding: 20, whiteSpace: "pre-wrap" }}>
+        DEBUG RENDER THROW: {err instanceof Error ? err.stack : String(err)}
+      </pre>
+    );
+  }
 }
