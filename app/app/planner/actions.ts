@@ -18,7 +18,7 @@ import {
 } from "@/lib/constants/content";
 import { dispatchToPublisher } from "@/lib/publishing/dispatch";
 import { attachUnsplashPhoto, captionToImageQuery } from "@/lib/unsplash/attach";
-import { getBufferPostStatus } from "@/lib/buffer/client";
+import { getBufferPostStatus, getBufferPostMetrics, BufferApiError } from "@/lib/buffer/client";
 import { getValidAccessToken } from "@/lib/google/oauth";
 import { getYoutubeVideoStatus } from "@/lib/youtube/client";
 import type { ActionResult } from "@/app/register/actions";
@@ -808,6 +808,43 @@ export async function checkPublishStatusAction(_prevState: ActionResult, formDat
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Status check failed" };
   }
+
+  refresh();
+  return {};
+}
+
+// ============================================================================
+// On-demand engagement insights for a published Facebook/Instagram post —
+// same on-demand-sync discipline as checkPublishStatusAction above (no cron,
+// client clicks "Refresh insights"). Only meaningful once Buffer confirms
+// the post was actually sent (buffer_post_id set, publish_status='sent') —
+// Buffer has nothing to report before then.
+// ============================================================================
+export async function syncPostInsightsAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
+  const supabase = createClient();
+  const member = await requireOrgMember(supabase);
+  if ("error" in member) return member;
+
+  const id = formData.get("id") as string;
+  const { data: item } = await supabase.from("content_items").select("buffer_post_id, publish_status").eq("id", id).single();
+  if (!item) return { error: "Content item not found." };
+  if (!item.buffer_post_id || item.publish_status !== "sent") {
+    return { error: "Nothing to fetch yet — this post hasn't been confirmed sent." };
+  }
+
+  let metrics;
+  try {
+    metrics = await getBufferPostMetrics(item.buffer_post_id);
+  } catch (err) {
+    if (err instanceof BufferApiError) return { error: err.message };
+    throw err;
+  }
+
+  const { error } = await supabase
+    .from("content_items")
+    .update({ insights: metrics.metrics, insights_synced_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) return { error: error.message };
 
   refresh();
   return {};

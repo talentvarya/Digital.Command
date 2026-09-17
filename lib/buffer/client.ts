@@ -121,3 +121,36 @@ export async function getBufferPostStatus(postId: string): Promise<BufferPostSta
   );
   return data.post;
 }
+
+// Post-level engagement metrics — reactions/comments are the normalized
+// baseline across every network; richer fields (impressions, reach,
+// engagementRate, etc.) appear only when the specific network reports them,
+// which is why this is a flat {type, name, value, unit} array rather than
+// fixed columns. Query shape verified against developers.buffer.com's own
+// "Get Post Metrics" example before writing this.
+export interface BufferPostMetric {
+  type: string;
+  name: string;
+  value: number;
+  unit: string | null;
+}
+
+export interface BufferPostMetrics {
+  id: string;
+  metrics: BufferPostMetric[];
+  metricsUpdatedAt: string | null;
+}
+
+export async function getBufferPostMetrics(postId: string): Promise<BufferPostMetrics> {
+  const data = await bufferGraphQL<{ post: BufferPostMetrics }>(
+    `query GetPostMetrics($id: PostId!) {
+      post(input: { id: $id }) {
+        id
+        metrics { type name value unit }
+        metricsUpdatedAt
+      }
+    }`,
+    { id: postId }
+  );
+  return data.post;
+}

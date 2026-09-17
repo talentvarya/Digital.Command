@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, Unlock, Trash2, Copy, CalendarClock, Sparkles, ImagePlus, X, History } from "lucide-react";
+import { Lock, Unlock, Trash2, Copy, CalendarClock, Sparkles, ImagePlus, X, History, BarChart3 } from "lucide-react";
 import { ActionForm } from "@/components/ActionForm";
 import { FormError } from "@/components/FormError";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -17,6 +17,7 @@ import {
   addContentMediaAction,
   removeContentMediaAction,
   checkPublishStatusAction,
+  syncPostInsightsAction,
   restoreContentVersionAction,
 } from "@/app/app/planner/actions";
 import { PLATFORM_LABELS, REJECTIONS_BEFORE_SUGGESTION } from "@/lib/constants/content";
@@ -87,6 +88,38 @@ export function ContentItemCard({ item, media, versions }: { item: ContentItem; 
           {item.publish_status === "error" && (
             <span className="text-red-600">Publish error: {item.publish_error}</span>
           )}
+        </div>
+      )}
+
+      {item.status === "published" && item.buffer_post_id && (
+        <div className="mb-2 flex flex-wrap items-center gap-3 rounded-lg bg-ink-50 px-3 py-2 text-xs">
+          {item.insights.length > 0 ? (
+            <>
+              {item.insights.map((m) => (
+                <span key={m.name} className="flex items-center gap-1 text-ink-700">
+                  <BarChart3 className="h-3 w-3 text-ink-400" />
+                  <span className="font-semibold [font-variant-numeric:tabular-nums]">{m.value}</span>
+                  <span className="text-ink-400">{m.name.replace(/_/g, " ")}</span>
+                </span>
+              ))}
+              {item.insights_synced_at && (
+                <span className="text-ink-400">as of {new Date(item.insights_synced_at).toLocaleString()}</span>
+              )}
+            </>
+          ) : (
+            <span className="text-ink-400">No insights synced yet.</span>
+          )}
+          <ActionForm action={syncPostInsightsAction}>
+            {(state) => (
+              <>
+                <input type="hidden" name="id" value={item.id} />
+                <SubmitButton className="text-brand-600 underline" pendingLabel="Refreshing…">
+                  Refresh insights
+                </SubmitButton>
+                <FormError message={state.error} />
+              </>
+            )}
+          </ActionForm>
         </div>
       )}
 

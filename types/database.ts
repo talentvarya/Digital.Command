@@ -241,9 +241,22 @@ export interface ContentItem {
   youtube_video_id: string | null;
   publish_status: "not_sent" | "sent" | "error";
   publish_error: string | null;
+  insights: ContentInsight[];
+  insights_synced_at: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
+}
+
+// Mirrors lib/buffer/client.ts's BufferPostMetric — kept as a separate type
+// here since content_items.insights is a plain jsonb column, not a foreign
+// relation, and a future non-Buffer publisher (YouTube) could populate the
+// same shape.
+export interface ContentInsight {
+  type: string;
+  name: string;
+  value: number;
+  unit: string | null;
 }
 
 export interface ContentMedia {
