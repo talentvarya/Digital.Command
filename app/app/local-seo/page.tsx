@@ -1,17 +1,14 @@
 import { redirect } from "next/navigation";
-import { Sparkles, CheckCircle2, AlertTriangle } from "lucide-react";
+import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { ActionForm } from "@/components/ActionForm";
-import { FormError } from "@/components/FormError";
-import { SubmitButton } from "@/components/SubmitButton";
 import { LocalSeoProfileForm } from "@/components/local-seo/LocalSeoProfileForm";
 import { CitationChecklist } from "@/components/local-seo/CitationChecklist";
 import { GbpPostCard } from "@/components/local-seo/GbpPostCard";
-import { draftGbpPostAction } from "@/app/app/local-seo/actions";
+import { DraftGbpPostButton } from "@/components/local-seo/DraftGbpPostButton";
 import { LOCAL_CITATION_DIRECTORIES } from "@/lib/constants/local-seo";
 import type { LocalSeoPost, LocalSeoProfile } from "@/types/database";
 
-async function LocalSeoPageInner() {
+export default async function LocalSeoPage() {
   const supabase = createClient();
   const {
     data: { user },
@@ -88,16 +85,7 @@ async function LocalSeoPageInner() {
             {citationsCompleted.length}/{LOCAL_CITATION_DIRECTORIES.length} directories listed
           </span>
         </div>
-        <ActionForm action={draftGbpPostAction}>
-          {(state) => (
-            <>
-              <SubmitButton className="btn-primary px-4 py-2 text-sm" pendingLabel="Drafting…">
-                <Sparkles className="mr-1 inline h-3.5 w-3.5" /> Draft a Google Post
-              </SubmitButton>
-              <FormError message={state.error} />
-            </>
-          )}
-        </ActionForm>
+        <DraftGbpPostButton />
         <div className="space-y-3">
           {postList.length === 0 && <p className="text-center text-sm text-ink-400">No posts drafted yet.</p>}
           {postList.map((post) => (
@@ -107,20 +95,4 @@ async function LocalSeoPageInner() {
       </div>
     </div>
   );
-}
-
-// TEMPORARY debug wrapper — remove once the live 500 on this route is
-// diagnosed (the inner function's own query try/catch never fired, so the
-// throw is somewhere else in this component's render path).
-export default async function LocalSeoPage() {
-  try {
-    return await LocalSeoPageInner();
-  } catch (err: any) {
-    if (err?.digest?.startsWith?.("NEXT_REDIRECT")) throw err;
-    return (
-      <pre style={{ color: "red", padding: 20, whiteSpace: "pre-wrap" }}>
-        DEBUG RENDER THROW: {err instanceof Error ? err.stack : String(err)}
-      </pre>
-    );
-  }
 }
