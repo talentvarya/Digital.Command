@@ -10,6 +10,7 @@ import { PaidCampaignsPanel } from "@/components/admin/PaidCampaignsPanel";
 import { OffboardingPanel } from "@/components/admin/OffboardingPanel";
 import { HealthCenterPanel } from "@/components/HealthCenterPanel";
 import { SandboxToggle } from "@/components/admin/SandboxToggle";
+import { PremiumApifyToggle } from "@/components/admin/PremiumApifyToggle";
 import { BUSINESS_TYPE_LABELS, BUSINESS_TYPE_REQUIREMENTS } from "@/lib/constants/business";
 import { BILLING_TERM_LABELS, formatInr } from "@/lib/constants/plans";
 import { PLATFORM_LABELS } from "@/lib/constants/content";
@@ -100,6 +101,7 @@ export default async function AdminClientDetailPage({ params }: { params: { orgI
   const { data: orgLinks } = org.status === "active" ? await supabase.from("org_links").select("*").eq("org_id", org.id) : { data: [] };
   const { data: googleConnections } =
     org.status === "active" ? await supabase.from("google_connections").select("service, status").eq("org_id", org.id) : { data: [] };
+  const { data: clientSettings } = await supabase.from("client_settings").select("premium_apify_enabled").eq("org_id", org.id).maybeSingle();
 
   return (
     <div className="space-y-6">
@@ -115,6 +117,11 @@ export default async function AdminClientDetailPage({ params }: { params: { orgI
         <div className="mt-1">
           <SandboxToggle orgId={org.id} isSandbox={org.is_sandbox} />
         </div>
+        {org.status === "active" && (
+          <div className="mt-2">
+            <PremiumApifyToggle orgId={org.id} enabled={clientSettings?.premium_apify_enabled ?? false} />
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

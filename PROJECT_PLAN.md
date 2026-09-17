@@ -213,3 +213,20 @@ Schema: `supabase/migrations/0027_phase10_local_seo_schema.sql` + `0028_phase10_
 - `npm run lint` and `npm run build` stay clean.
 
 Schema: `supabase/migrations/0029_phase11_aeo_schema.sql` + `0030_phase11_aeo_rls.sql` (run manually in the Supabase SQL Editor).
+
+## Phase 12 — Competitor Search (Apify), a premium add-on
+
+Unlike the GBP-gated features above, real Google SERP data doesn't need a slow external approval — it needs a paid scraping vendor (Apify), which is exactly the "new paid vendor relationship" line already declined twice (Phase 3 competitor tracking, Phase 5 backlink data) absent explicit sign-off. The owner explicitly asked for this one, with two conditions that shape the whole design:
+
+1. **Bring-your-own-account, not VMG-shared.** Each client connects their own Apify account (their own API token, pasted in like a Google review link — Apify has no per-client OAuth) so usage bills to *their* Apify account. There's no shared-cost problem for VMG to manage, unlike Buffer's shared-account model in Phase 4.
+2. **Premium, admin-gated.** A new `client_settings.premium_apify_enabled` boolean, off by default — only a Super Admin can switch it on per client (`setPremiumApifyAction`, admin client detail page), same manual-approval spirit as Phase 1's payment verification. A client without it sees a plain "ask your contact to enable this" card instead of the tool.
+
+**Exit criteria met:**
+- A client (once enabled) can connect their own Apify API token and run a real Google search for any term via Apify's official `apify/google-search-scraper` actor — verified against real live output before writing the parsing code (actor id and result shape confirmed via Apify's own API, not guessed).
+- Results show real organic ranking positions and, when the client's website is connected (`org_links`), exactly which position (if any) their own domain holds.
+- Every search is saved as a snapshot the client can scroll back through.
+- `npm run lint` and `npm run build` stay clean.
+
+**Known, inherited limitation:** `client_settings`'s existing owner-update RLS policy (`client_settings_owner_update`, added in Phase 7) is row-level, not column-level — same as every other column already on that table (e.g. `manual_buffer_cost_usd`), a technically-savvy client could in principle flip their own `premium_apify_enabled` via a raw API call, bypassing the UI. This is a pre-existing characteristic of the table's trust model, not something new introduced here — worth a real column-level fix (Postgres column privileges, or splitting admin-only fields into their own table) if it's ever treated as a real risk, but out of scope for this addition specifically.
+
+Schema: `supabase/migrations/0031_phase12_apify_schema.sql` + `0032_phase12_apify_rls.sql` (run manually in the Supabase SQL Editor).

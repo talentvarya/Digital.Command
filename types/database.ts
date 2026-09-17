@@ -152,6 +152,7 @@ export interface ClientSettings {
   manual_other_cost_label: string | null;
   google_review_link: string | null;
   facebook_review_link: string | null;
+  premium_apify_enabled: boolean;
 }
 
 export interface SystemSettings {
@@ -310,6 +311,38 @@ export interface SeoIssue {
   severity: "critical" | "warning" | "info";
   type: string;
   message: string;
+}
+
+export type ApifyConnectionStatus = "connected" | "not_added" | "error";
+
+// Safe-to-render shape — never includes api_token. Same discipline as
+// GoogleConnectionPublic above: queries feeding client-facing UI must select
+// only these columns.
+export interface ApifyConnectionPublic {
+  org_id: string;
+  status: ApifyConnectionStatus;
+  connected_at: string | null;
+  last_used_at: string | null;
+}
+
+export interface ApifySearchResult {
+  position: number;
+  title: string;
+  url: string;
+  domain: string;
+  description: string;
+}
+
+export interface ApifySearchSnapshot {
+  id: string;
+  org_id: string;
+  query: string;
+  country_code: string | null;
+  own_domain: string | null;
+  own_domain_position: number | null;
+  top_results: ApifySearchResult[];
+  run_at: string;
+  triggered_by: string | null;
 }
 
 export interface SeoAudit {

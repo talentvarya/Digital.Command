@@ -13,6 +13,7 @@ import {
   MousePointerClick,
   Star,
   Bot,
+  Trophy,
   Package,
   CalendarClock,
   Hourglass,
@@ -147,6 +148,9 @@ export default async function ClientDashboardPage() {
           <ModuleLinkCard icon={HeartPulse} title="Connection Health" subtitle="One place to see what's connected, not added, or needs reconnecting" href="/app/health" color={MODULE_COLORS.red} />
           <ModuleLinkCard icon={MapPin} title="Local SEO Toolkit" subtitle="NAP consistency, citation checklist, AI-drafted Google Posts you post yourself" href="/app/local-seo" color={MODULE_COLORS.blue} />
           <ModuleLinkCard icon={Bot} title="AI Search Visibility" subtitle="Audit how AI-ready your site is, get AI-drafted FAQ content to add" href="/app/ai-visibility" color={MODULE_COLORS.orange} />
+          {settings?.premium_apify_enabled && (
+            <ModuleLinkCard icon={Trophy} title="Competitor Search" subtitle="Real Google results via your own Apify account — see where you and competitors rank" href="/app/competitor-search" color={MODULE_COLORS.yellow} />
+          )}
         </div>
       </section>
 

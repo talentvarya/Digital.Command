@@ -255,6 +255,33 @@ export async function setSandboxAction(_prevState: ActionResult, formData: FormD
   return {};
 }
 
+// Premium add-on gate for Competitor Search (Apify) — off by default, a
+// Super Admin switches it on per client (same manual-approval pattern as
+// Phase 1's payment verification, not a live billing/plan-tier system).
+export async function setPremiumApifyAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
+  const orgId = formData.get("orgId") as string;
+  const enabled = formData.get("enabled") === "true";
+
+  const supabase = createClient();
+  const admin = await requireSuperAdmin(supabase);
+  if ("error" in admin) return admin;
+
+  const { error } = await supabase.from("client_settings").update({ premium_apify_enabled: enabled }).eq("org_id", orgId);
+  if (error) return { error: error.message };
+
+  await logAudit(supabase, {
+    orgId,
+    actorUserId: admin.id,
+    actorRole: "super_admin",
+    source: "ADMIN",
+    actionType: enabled ? "premium_apify_enabled" : "premium_apify_disabled",
+    target: orgId,
+  });
+
+  refresh(orgId);
+  return {};
+}
+
 export async function rejectApplicationAction(
   _prevState: ActionResult,
   formData: FormData
