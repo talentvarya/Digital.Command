@@ -56,12 +56,12 @@ export default async function AdminLeadsPage() {
         <MetricStatCard icon={CheckCircle2} label="Converted" current={convertedCount} previous={null} color={CHART_COLORS.aqua} />
       </div>
 
-      <div className="card">
+      <div className="card ml-auto max-w-sm">
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink-900">
           <TrendingUp className="h-4 w-4 text-ink-400" />
           Leads per day — last 14 days
         </h2>
-        <TrendLineChart points={trendDays} color={CHART_COLORS.blue} />
+        <TrendLineChart points={trendDays} color={CHART_COLORS.blue} height={100} />
       </div>
 
       <div className="space-y-3">
