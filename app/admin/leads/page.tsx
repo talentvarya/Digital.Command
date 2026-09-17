@@ -1,9 +1,10 @@
 import { Users, UserPlus, CheckCircle2, TrendingUp } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { LeadCard } from "@/components/admin/LeadCard";
+import { LeadFilters } from "@/components/admin/LeadFilters";
 import { MetricStatCard, CHART_COLORS } from "@/components/charts/StatCard";
 import { TrendLineChart, type TrendPoint } from "@/components/charts/TrendLineChart";
-import type { RoadmapLead } from "@/types/database";
+import type { LeadStatus, RoadmapLead } from "@/types/database";
 
 function startOfDay(d: Date) {
   const copy = new Date(d);
@@ -11,11 +12,25 @@ function startOfDay(d: Date) {
   return copy;
 }
 
-export default async function AdminLeadsPage() {
+const VALID_STATUSES: LeadStatus[] = ["new", "contacted", "converted", "not_interested"];
+
+export default async function AdminLeadsPage({ searchParams }: { searchParams: { status?: string; q?: string } }) {
   const supabase = createClient();
 
   const { data: leads } = await supabase.from("roadmap_leads").select("*").order("created_at", { ascending: false });
   const leadList = (leads ?? []) as RoadmapLead[];
+
+  const statusFilter = VALID_STATUSES.includes(searchParams.status as LeadStatus) ? (searchParams.status as LeadStatus) : "all";
+  const query = (searchParams.q ?? "").trim().toLowerCase();
+
+  const filteredList = leadList.filter((l) => {
+    if (statusFilter !== "all" && l.status !== statusFilter) return false;
+    if (query) {
+      const haystack = `${l.business_name} ${l.contact_name} ${l.contact_phone} ${l.contact_email ?? ""}`.toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  });
 
   const now = new Date();
   const sevenDaysAgo = startOfDay(new Date(now.getTime() - 7 * 86400000));
@@ -64,9 +79,15 @@ export default async function AdminLeadsPage() {
         <TrendLineChart points={trendDays} color={CHART_COLORS.blue} height={100} />
       </div>
 
+      <LeadFilters status={statusFilter} q={searchParams.q ?? ""} />
+
       <div className="space-y-3">
-        {leadList.length === 0 && <p className="card text-center text-sm text-ink-400">No leads yet.</p>}
-        {leadList.map((lead) => (
+        {filteredList.length === 0 && (
+          <p className="card text-center text-sm text-ink-400">
+            {leadList.length === 0 ? "No leads yet." : "No leads match this search/filter."}
+          </p>
+        )}
+        {filteredList.map((lead) => (
           <LeadCard key={lead.id} lead={lead} />
         ))}
       </div>
