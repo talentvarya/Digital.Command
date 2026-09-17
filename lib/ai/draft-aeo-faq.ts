@@ -8,13 +8,19 @@ export interface DraftedAeoFaq {
   usage: AiUsage;
 }
 
+// Q&A pairs come back as an array of single-line {question, answer} objects
+// rather than one big multi-line string — asking a model for embedded
+// "\n" inside a JSON string value is unreliable (it very often emits a
+// literal newline instead of the escaped sequence, which is invalid JSON
+// and fails every retry, not just an occasional truncation). The multi-line
+// FAQ text is assembled server-side from the parsed array instead.
 const SYSTEM_PROMPT = `You write a short FAQ section (4-6 question/answer pairs) for a local business's own website, aimed at giving AI answer engines (ChatGPT, Gemini, Perplexity, Google AI Overviews) clear, quotable facts about the business.
 Rules:
-- Plain text, formatted as "Q: ...\\nA: ..." pairs separated by a blank line — this gets pasted directly onto the client's site.
-- Answers are 1-3 sentences, specific and factual (what the business offers, where it is, hours, what makes it different) — never invented facts; use only what's given below.
+- Each answer is 1-3 sentences, specific and factual (what the business offers, where it is, hours, what makes it different) — never invented facts; use only what's given below.
 - Cover the specific gaps you're told about first (e.g. if location isn't clear on the site, include a "where are you located" question).
 - Never guarantee AI-engine visibility, rankings, or any specific outcome from adding this content.
-Respond with ONLY a JSON object: {"faqDraft": string}`;
+- Each question and each answer must be a single line of plain text — no line breaks inside a question or answer.
+Respond with ONLY a JSON object: {"pairs": [{"question": string, "answer": string}]}`;
 
 export async function draftAeoFaq(params: {
   findings: AeoFinding[];
@@ -43,8 +49,14 @@ export async function draftAeoFaq(params: {
   } catch {
     throw new AiGenerationError("Couldn't generate clean FAQ content that time — please try again.");
   }
-  return {
-    faqDraft: typeof parsed.faqDraft === "string" ? parsed.faqDraft : result.text.trim(),
-    usage: result.usage,
-  };
+
+  const pairs = Array.isArray(parsed.pairs) ? parsed.pairs : [];
+  const faqDraft = pairs
+    .filter((p): p is { question: string; answer: string } => typeof p?.question === "string" && typeof p?.answer === "string")
+    .map((p) => `Q: ${p.question}\nA: ${p.answer}`)
+    .join("\n\n");
+
+  if (!faqDraft) throw new AiGenerationError("Couldn't generate clean FAQ content that time — please try again.");
+
+  return { faqDraft, usage: result.usage };
 }
