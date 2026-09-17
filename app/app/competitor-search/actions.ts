@@ -79,8 +79,9 @@ export async function runCompetitorSearchAction(_prevState: ActionResult, formDa
   if (!automation.allowed) return { error: automation.reason };
 
   const query = ((formData.get("query") as string) || "").trim();
-  const countryCode = ((formData.get("countryCode") as string) || "in").trim();
-  if (!query) return { error: "Enter a search term (e.g. \"chocolate shop pune\")." };
+  const location = ((formData.get("location") as string) || "").trim();
+  if (!query) return { error: "Enter what you'd search for (e.g. \"chocolate shop\")." };
+  if (!location) return { error: "Enter a location (e.g. \"Pune, India\")." };
 
   const [{ data: connection }, { data: websiteLink }] = await Promise.all([
     supabase.from("apify_connections").select("api_token, status").eq("org_id", member.orgId).maybeSingle(),
@@ -101,7 +102,7 @@ export async function runCompetitorSearchAction(_prevState: ActionResult, formDa
 
   let result;
   try {
-    result = await runCompetitorSearch({ apiToken: connection.api_token, query, countryCode, ownDomain });
+    result = await runCompetitorSearch({ apiToken: connection.api_token, query, location, ownDomain });
   } catch (err) {
     if (err instanceof ApifyError) {
       await supabase.from("apify_connections").update({ status: "error", updated_at: new Date().toISOString() }).eq("org_id", member.orgId);
@@ -113,7 +114,7 @@ export async function runCompetitorSearchAction(_prevState: ActionResult, formDa
   const { error } = await supabase.from("apify_search_snapshots").insert({
     org_id: member.orgId,
     query,
-    country_code: countryCode,
+    country_code: location, // column name predates the Maps-Scraper switch; holds the free-text location now
     own_domain: ownDomain,
     own_domain_position: result.ownDomainPosition,
     top_results: result.topResults,

@@ -30,9 +30,9 @@ export default async function CompetitorSearchPage() {
           <Lock className="h-8 w-8 text-ink-300" />
           <h1 className="text-xl font-bold text-ink-900">Competitor Search is a premium add-on</h1>
           <p className="text-sm text-ink-500">
-            Real Google search data via your own connected Apify account — see exactly where you and your
-            competitors rank for the searches your customers actually use. Ask your Digital Command contact to
-            enable it for your account.
+            Real Google Maps results via your own connected Apify account — see exactly who else shows up when
+            customers search for what you do, with their rating, reviews, and contact info. Ask your Digital
+            Command contact to enable it for your account.
           </p>
         </div>
       </div>
@@ -49,8 +49,8 @@ export default async function CompetitorSearchPage() {
       <div>
         <h1 className="mb-1 text-2xl font-bold text-ink-900">Competitor Search</h1>
         <p className="text-sm text-ink-500">
-          Real Google search results for any term — see where you rank and who&apos;s ahead of you, pulled live via
-          your own Apify account.
+          Real Google Maps results for any search + area — see who else shows up, their rating and reviews, and
+          where you rank among them, pulled live via your own Apify account.
         </p>
       </div>
 

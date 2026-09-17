@@ -1,30 +1,37 @@
 // Calls Apify's REST API directly (no SDK dependency, same pattern as
 // lib/google/*'s raw-fetch OAuth clients) using the CLIENT's OWN Apify API
-// token — usage is billed to their own Apify account, never VMG's. Actor id
-// is apify/google-search-scraper (official Apify actor, verified via
-// fetch-actor-details before writing this — id "nFJndFXA5zjCTuudP"), called
-// through the run-sync-get-dataset-items endpoint so a single request both
-// runs the actor and returns its results, no polling needed.
-const GOOGLE_SEARCH_SCRAPER_ACTOR_ID = "nFJndFXA5zjCTuudP";
+// token — usage is billed to their own Apify account, never VMG's. Actor is
+// the Google Maps Scraper (compass/crawler-google-places, id
+// "nwua9Gu5YrADL7ZDj") — chosen over a generic Google-search scraper because
+// it's what actually matters for a local business: who else shows up on the
+// map for the same search, their rating/review count/category, not generic
+// web-page rankings. Actor id, input shape, and every output field below
+// were confirmed via a real live run before writing this, not guessed.
+const GOOGLE_MAPS_SCRAPER_ACTOR_ID = "nwua9Gu5YrADL7ZDj";
 
-export interface ApifyOrganicResult {
-  position: number;
-  title: string;
-  url: string;
-  domain: string;
-  description: string;
+export interface ApifyMapsResult {
+  rank: number;
+  businessName: string;
+  category: string | null;
+  address: string | null;
+  phone: string | null;
+  website: string | null;
+  domain: string | null;
+  rating: number | null;
+  reviewsCount: number | null;
+  mapsUrl: string | null;
 }
 
 export interface CompetitorSearchResult {
-  topResults: ApifyOrganicResult[];
+  topResults: ApifyMapsResult[];
   ownDomainPosition: number | null;
 }
 
-function extractDomain(url: string): string {
+function extractDomain(url: string): string | null {
   try {
     return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
   } catch {
-    return url;
+    return null;
   }
 }
 
@@ -33,17 +40,22 @@ export class ApifyError extends Error {}
 export async function runCompetitorSearch(params: {
   apiToken: string;
   query: string;
-  countryCode: string;
+  location: string;
   ownDomain: string | null;
 }): Promise<CompetitorSearchResult> {
-  const { apiToken, query, countryCode, ownDomain } = params;
+  const { apiToken, query, location, ownDomain } = params;
 
   const res = await fetch(
-    `https://api.apify.com/v2/acts/${GOOGLE_SEARCH_SCRAPER_ACTOR_ID}/run-sync-get-dataset-items?token=${encodeURIComponent(apiToken)}`,
+    `https://api.apify.com/v2/acts/${GOOGLE_MAPS_SCRAPER_ACTOR_ID}/run-sync-get-dataset-items?token=${encodeURIComponent(apiToken)}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ queries: query, maxPagesPerQuery: 1, countryCode }),
+      body: JSON.stringify({
+        searchStringsArray: [query],
+        locationQuery: location,
+        maxCrawledPlacesPerSearch: 20,
+        language: "en",
+      }),
     }
   );
 
@@ -59,26 +71,36 @@ export async function runCompetitorSearch(params: {
     throw new ApifyError(message);
   }
 
-  const items = (await res.json()) as Array<{ organicResults?: unknown[] }>;
-  const rawResults = (items[0]?.organicResults ?? []) as Array<{
-    position?: number;
+  const items = (await res.json()) as Array<{
+    rank?: number;
     title?: string;
+    categoryName?: string;
+    address?: string;
+    phone?: string;
+    website?: string;
+    totalScore?: number;
+    reviewsCount?: number;
     url?: string;
-    description?: string;
   }>;
 
-  const topResults: ApifyOrganicResult[] = rawResults
-    .filter((r) => r.url && r.title)
+  const topResults: ApifyMapsResult[] = items
+    .filter((r) => r.title)
     .map((r, i) => ({
-      position: r.position ?? i + 1,
-      title: r.title as string,
-      url: r.url as string,
-      domain: extractDomain(r.url as string),
-      description: r.description ?? "",
-    }));
+      rank: r.rank ?? i + 1,
+      businessName: r.title as string,
+      category: r.categoryName ?? null,
+      address: r.address ?? null,
+      phone: r.phone ?? null,
+      website: r.website ?? null,
+      domain: r.website ? extractDomain(r.website) : null,
+      rating: r.totalScore ?? null,
+      reviewsCount: r.reviewsCount ?? null,
+      mapsUrl: r.url ?? null,
+    }))
+    .sort((a, b) => a.rank - b.rank);
 
   const normalizedOwnDomain = ownDomain ? ownDomain.replace(/^www\./, "").toLowerCase() : null;
   const ownMatch = normalizedOwnDomain ? topResults.find((r) => r.domain === normalizedOwnDomain) : undefined;
 
-  return { topResults, ownDomainPosition: ownMatch?.position ?? null };
+  return { topResults, ownDomainPosition: ownMatch?.rank ?? null };
 }

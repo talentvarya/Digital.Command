@@ -325,12 +325,19 @@ export interface ApifyConnectionPublic {
   last_used_at: string | null;
 }
 
+// Shape matches the Google Maps Scraper's (compass/crawler-google-places)
+// real output fields — confirmed via a live run before writing lib/apify/client.ts.
 export interface ApifySearchResult {
-  position: number;
-  title: string;
-  url: string;
-  domain: string;
-  description: string;
+  rank: number;
+  businessName: string;
+  category: string | null;
+  address: string | null;
+  phone: string | null;
+  website: string | null;
+  domain: string | null;
+  rating: number | null;
+  reviewsCount: number | null;
+  mapsUrl: string | null;
 }
 
 export interface ApifySearchSnapshot {

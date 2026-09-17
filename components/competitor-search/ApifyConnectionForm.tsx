@@ -20,7 +20,7 @@ export function ApifyConnectionForm({ connection }: { connection: ApifyConnectio
       <p className="text-sm text-ink-500">
         This connects your own Apify account (apify.com) — searches run and are billed on your account, not Digital
         Command&apos;s. Create a free account, copy your API token from Settings → Integrations, and paste it below.
-        Each search costs roughly $0.005–0.01 in Apify credits.
+        Each search costs roughly $0.08 in Apify credits (up to 20 businesses per search).
       </p>
 
       {isConnected ? (

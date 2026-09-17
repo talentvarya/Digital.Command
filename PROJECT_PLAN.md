@@ -222,8 +222,8 @@ Unlike the GBP-gated features above, real Google SERP data doesn't need a slow e
 2. **Premium, admin-gated.** A new `client_settings.premium_apify_enabled` boolean, off by default — only a Super Admin can switch it on per client (`setPremiumApifyAction`, admin client detail page), same manual-approval spirit as Phase 1's payment verification. A client without it sees a plain "ask your contact to enable this" card instead of the tool.
 
 **Exit criteria met:**
-- A client (once enabled) can connect their own Apify API token and run a real Google search for any term via Apify's official `apify/google-search-scraper` actor — verified against real live output before writing the parsing code (actor id and result shape confirmed via Apify's own API, not guessed).
-- Results show real organic ranking positions and, when the client's website is connected (`org_links`), exactly which position (if any) their own domain holds.
+- A client (once enabled) can connect their own Apify API token and run a real Google Maps search (term + location) via the Google Maps Scraper actor (`compass/crawler-google-places`) — chosen over a generic web-search scraper because local-pack listings (competing businesses, their rating/review count/category) are what actually matters for a local-business client. Actor id, input shape, and every output field were confirmed via a real live run before writing the parser, not guessed.
+- Results show real business listings ranked as Google Maps ranks them, and when the client's website is connected (`org_links`), exactly which rank (if any) their own domain holds.
 - Every search is saved as a snapshot the client can scroll back through.
 - `npm run lint` and `npm run build` stay clean.
 
