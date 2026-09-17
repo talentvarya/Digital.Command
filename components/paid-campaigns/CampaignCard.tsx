@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useFormState } from "react-dom";
 import { Pencil, Trash2, ShieldCheck } from "lucide-react";
 import { ActionForm } from "@/components/ActionForm";
 import { FormError } from "@/components/FormError";
@@ -16,6 +17,7 @@ import {
 } from "@/app/app/paid-campaigns/actions";
 import { AD_PLATFORM_LABELS, BUDGET_PERIOD_LABELS, CAMPAIGN_OBJECTIVE_OPTIONS } from "@/lib/constants/paid-campaigns";
 import { formatInr } from "@/lib/constants/plans";
+import type { ActionResult } from "@/app/register/actions";
 import type { AdPlatform, BudgetPeriod, PaidCampaign, PaidCampaignApproval } from "@/types/database";
 
 const EDITABLE_STATUSES = ["draft", "pending_approval", "approved", "rejected"];
@@ -25,6 +27,22 @@ export function CampaignCard({ campaign, approvals }: { campaign: PaidCampaign; 
   const [editing, setEditing] = useState(campaign.status === "draft");
   const [showReject, setShowReject] = useState(false);
   const canEdit = EDITABLE_STATUSES.includes(campaign.status);
+
+  // A draft campaign starts in edit mode so the client can fill in
+  // budget/dates — but revalidation after Save remounts this card with
+  // campaign.status still "draft", so the useState above would otherwise
+  // re-initialize editing=true forever and "Submit for Approval" (which only
+  // renders when !editing) could never appear. Drop out of edit mode after a
+  // real successful save (never on the initial mount's own empty state).
+  const [updateState, updateFormAction] = useFormState<ActionResult, FormData>(updateCampaignAction, {});
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (!updateState.error) setEditing(false);
+  }, [updateState]);
 
   return (
     <div className="card">
@@ -46,13 +64,8 @@ export function CampaignCard({ campaign, approvals }: { campaign: PaidCampaign; 
       </div>
 
       {editing ? (
-        <ActionForm
-          action={updateCampaignAction}
-          className="space-y-3 rounded-lg bg-ink-50 p-3"
-        >
-          {(state) => (
-            <>
-              <input type="hidden" name="id" value={campaign.id} />
+        <form action={updateFormAction} className="space-y-3 rounded-lg bg-ink-50 p-3">
+          <input type="hidden" name="id" value={campaign.id} />
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="field-label">Campaign name</label>
@@ -133,10 +146,8 @@ export function CampaignCard({ campaign, approvals }: { campaign: PaidCampaign; 
               {(campaign.status === "approved" || campaign.status === "rejected") && (
                 <p className="text-xs text-amber-600">Saving changes will resubmit this campaign for approval.</p>
               )}
-              <FormError message={state.error} />
-            </>
-          )}
-        </ActionForm>
+              <FormError message={updateState.error} />
+        </form>
       ) : (
         <div className="space-y-2 text-sm">
           {campaign.audience_description && <p className="text-ink-700">{campaign.audience_description}</p>}
