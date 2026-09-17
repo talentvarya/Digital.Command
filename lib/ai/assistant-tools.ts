@@ -45,6 +45,11 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
       properties: {
         date: { type: "string", description: "The item's scheduled date, YYYY-MM-DD." },
         platform: { type: "string", enum: ["facebook", "instagram", "youtube"], description: "Only needed if more than one item is scheduled that day." },
+        time: {
+          type: "string",
+          enum: ["09:00", "18:00"],
+          description: "Only needed if more than one item matches date+platform — e.g. a client posting Morning and Evening. 09:00 = morning, 18:00 = evening.",
+        },
         newCaption: { type: "string" },
         newHashtags: { type: "array", items: { type: "string" }, description: "Without # symbols." },
       },
@@ -59,6 +64,11 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
       properties: {
         date: { type: "string", description: "The item's scheduled date, YYYY-MM-DD." },
         platform: { type: "string", enum: ["facebook", "instagram", "youtube"], description: "Only needed if more than one item is scheduled that day." },
+        time: {
+          type: "string",
+          enum: ["09:00", "18:00"],
+          description: "Only needed if more than one item matches date+platform — e.g. a client posting Morning and Evening. 09:00 = morning, 18:00 = evening.",
+        },
         clientSuggestion: { type: "string", description: "What the client wants different this time, if they said anything specific." },
       },
       required: ["date"],
@@ -72,6 +82,11 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
       properties: {
         date: { type: "string", description: "YYYY-MM-DD." },
         platform: { type: "string", enum: ["facebook", "instagram", "youtube"] },
+        time: {
+          type: "string",
+          enum: ["09:00", "18:00"],
+          description: "Only needed if more than one item matches date+platform — e.g. a client posting Morning and Evening. 09:00 = morning, 18:00 = evening.",
+        },
       },
       required: ["date"],
     },
@@ -94,13 +109,26 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
 
 type FoundContentItem = { error: string } | { item: any };
 
-async function findContentItem(supabase: SupabaseClient, orgId: string, date: string, platform?: string): Promise<FoundContentItem> {
+async function findContentItem(
+  supabase: SupabaseClient,
+  orgId: string,
+  date: string,
+  platform?: string,
+  time?: string
+): Promise<FoundContentItem> {
   let query = supabase.from("content_items").select("*").eq("org_id", orgId).eq("scheduled_date", date);
   if (platform) query = query.eq("platform", platform);
+  if (time) query = query.eq("scheduled_time", time);
   const { data } = await query;
-  if (!data || data.length === 0) return { error: `No content is scheduled for ${date}${platform ? ` on ${platform}` : ""}.` };
+  if (!data || data.length === 0) {
+    return { error: `No content is scheduled for ${date}${platform ? ` on ${platform}` : ""}${time ? ` at ${time}` : ""}.` };
+  }
   if (data.length > 1) {
-    return { error: `More than one item is scheduled for ${date} (${data.map((i) => i.platform).join(", ")}) — ask which platform.` };
+    // Post-2-per-day, date+platform alone can be ambiguous (Morning + Evening)
+    // — surface each match's slot so the model can ask "morning or evening?"
+    // and re-call with `time` instead of guessing.
+    const descriptions = data.map((i) => `${i.platform}${i.scheduled_time ? ` at ${i.scheduled_time}` : " (no time set)"}`).join(", ");
+    return { error: `More than one item matches (${descriptions}) — ask which platform and/or time (09:00 morning or 18:00 evening), then call again with both.` };
   }
   return { item: data[0] };
 }
@@ -147,7 +175,7 @@ export async function executeAssistantTool(name: string, input: Record<string, u
     const automation = await checkAutomationAllowed(supabase, orgId);
     if (!automation.allowed) return { content: automation.reason, isError: true };
 
-    const found = await findContentItem(supabase, orgId, input.date as string, input.platform as string | undefined);
+    const found = await findContentItem(supabase, orgId, input.date as string, input.platform as string | undefined, input.time as string | undefined);
     if ("error" in found) return { content: found.error, isError: true };
     if (found.item.locked) return { content: "That item is locked and can't be edited.", isError: true };
 
@@ -191,7 +219,7 @@ export async function executeAssistantTool(name: string, input: Record<string, u
     const automation = await checkAutomationAllowed(supabase, orgId);
     if (!automation.allowed) return { content: automation.reason, isError: true };
 
-    const found = await findContentItem(supabase, orgId, input.date as string, input.platform as string | undefined);
+    const found = await findContentItem(supabase, orgId, input.date as string, input.platform as string | undefined, input.time as string | undefined);
     if ("error" in found) return { content: found.error, isError: true };
     if (found.item.locked) return { content: "That item is locked and can't be regenerated.", isError: true };
 
@@ -286,7 +314,7 @@ export async function executeAssistantTool(name: string, input: Record<string, u
   }
 
   if (name === "skip_content_item") {
-    const found = await findContentItem(supabase, orgId, input.date as string, input.platform as string | undefined);
+    const found = await findContentItem(supabase, orgId, input.date as string, input.platform as string | undefined, input.time as string | undefined);
     if ("error" in found) return { content: found.error, isError: true };
     if (found.item.locked) return { content: "That item is locked and can't be skipped.", isError: true };
 
