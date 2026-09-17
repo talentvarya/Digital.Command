@@ -12,6 +12,7 @@ import {
   HeartPulse,
   MousePointerClick,
   Star,
+  Bot,
   Package,
   CalendarClock,
   Hourglass,
@@ -20,7 +21,6 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ComingSoonCard } from "@/components/client/ComingSoonCard";
 import { ModuleLinkCard } from "@/components/client/ModuleLinkCard";
 import { MasterStopPanel } from "@/components/client/MasterStopPanel";
 import { CHART_COLORS } from "@/components/charts/StatCard";
@@ -145,7 +145,8 @@ export default async function ClientDashboardPage() {
           <ModuleLinkCard icon={Sparkles} title="AI Assistant" subtitle="Ask about your report, edit or skip a post, draft something new" href="/app/assistant" color={MODULE_COLORS.yellow} />
           <ModuleLinkCard icon={MousePointerClick} title="Conversions" subtitle="Trackable WhatsApp/call/form links plus a real Google Organic → Sales funnel" href="/app/conversions" color={MODULE_COLORS.blue} />
           <ModuleLinkCard icon={HeartPulse} title="Connection Health" subtitle="One place to see what's connected, not added, or needs reconnecting" href="/app/health" color={MODULE_COLORS.red} />
-          <ComingSoonCard icon={MapPin} title="Local SEO / Google Business Profile" />
+          <ModuleLinkCard icon={MapPin} title="Local SEO Toolkit" subtitle="NAP consistency, citation checklist, AI-drafted Google Posts you post yourself" href="/app/local-seo" color={MODULE_COLORS.blue} />
+          <ModuleLinkCard icon={Bot} title="AI Search Visibility" subtitle="Audit how AI-ready your site is, get AI-drafted FAQ content to add" href="/app/ai-visibility" color={MODULE_COLORS.orange} />
         </div>
       </section>
 

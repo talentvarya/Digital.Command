@@ -189,3 +189,27 @@ A free, public, unauthenticated page at `/roadmap` (linked from the homepage) �
 **Open item:** the "Call now"/"WhatsApp now" buttons on the generated roadmap read `NEXT_PUBLIC_VMG_WHATSAPP_NUMBER`/`NEXT_PUBLIC_VMG_PHONE`, both unset as of this writing — falls back to a `mailto:hello@visionarymastersglobal.com` link until VMG's real number is added to `.env.local`/Vercel.
 
 Schema: `supabase/migrations/0024_phase9_roadmap_leads_schema.sql` + `0025_phase9_roadmap_leads_rls.sql` (not yet applied to the live project as of this writing — run manually in the Supabase SQL Editor).
+
+## Phase 10 — Local SEO Toolkit (post-spec, next of the "best of best" roadmap)
+
+Same external gate as GBP everywhere else in this document: real Google Business Profile API access needs a 60+ day verified profile and a formal access request, so there's no automated posting or live listing data here. Scoped to what's genuinely buildable today — the same "draft here, do it yourself" discipline as Phase 8.
+
+**Exit criteria met:**
+- A client can save their business's address/city/state/pincode/GBP category/GBP link, and see a plain NAP-consistency checklist against what's already in Brand Brain and their Local SEO profile.
+- A client can mark which of a fixed set of common citation directories (Google, Facebook, Bing Places, Apple Maps, Justdial, Sulekha, IndiaMART, Yelp) they're already listed on — no scraping, a manual checklist.
+- A client can get an AI-drafted "Google Post" (offer/update text) plus 5 local keyword suggestions in one generation, copy the text, and mark it posted once they've put it on their own GBP account.
+- `npm run lint` and `npm run build` stay clean.
+
+Schema: `supabase/migrations/0027_phase10_local_seo_schema.sql` + `0028_phase10_local_seo_rls.sql` (run manually in the Supabase SQL Editor — same as every migration since this session's Supabase MCP connection isn't linked to this project).
+
+## Phase 11 — AI Search Visibility / AEO (post-spec)
+
+"AEO" (Answer Engine Optimization) here means: does the client's own site give an AI answer engine (ChatGPT, Gemini, Perplexity, Google AI Overviews) clear, quotable facts when someone asks it something like "best chocolate shop in Pune"? There's no API to query those engines' live outputs, and simulating one would risk implying a guaranteed-visibility claim — the exact thing every AI-generation call site in this app is explicitly built to avoid. So this is a real crawl-based audit of the on-page signals those engines are known to rely on (structured data, FAQ-shaped content, plain NAP text, review signals), scored 0-100 like the Phase 3 SEO audit, plus an AI-drafted FAQ block addressing whatever gaps it finds.
+
+**Exit criteria met:**
+- A client can run a real audit of their own site (no third-party API) and see a 0-100 score with a specific finding per signal checked.
+- A client can generate an AI-drafted FAQ section (4-6 Q&A pairs) targeted at the actual gaps found, to copy onto their own website.
+- Never claims or implies real-time monitoring of actual AI engines, or guarantees any ranking/visibility outcome.
+- `npm run lint` and `npm run build` stay clean.
+
+Schema: `supabase/migrations/0029_phase11_aeo_schema.sql` + `0030_phase11_aeo_rls.sql` (run manually in the Supabase SQL Editor).

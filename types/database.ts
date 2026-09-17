@@ -506,7 +506,9 @@ export type AiUsageFeature =
   | "outreach_draft"
   | "campaign_brief"
   | "assistant_chat"
-  | "review_reply_draft";
+  | "review_reply_draft"
+  | "local_seo_post_draft"
+  | "aeo_faq_draft";
 
 // The AI Assistant (assistant-chat.ts) always uses "anthropic" regardless of
 // AI_PROVIDER — see lib/ai/provider.ts and assistant-tools.ts's pinned
@@ -581,6 +583,58 @@ export interface ReviewRequest {
   message_sent: string;
   created_by: string | null;
   created_at: string;
+}
+
+// ============================================================================
+// Local SEO Toolkit — GBP/local citation data the client tracks by hand
+// (real GBP API access is the same external gate blocking automated
+// posting/data since Phase 4). See supabase/migrations/0027-0028.
+// ============================================================================
+export interface LocalSeoProfile {
+  org_id: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  pincode: string | null;
+  gbp_category: string | null;
+  gbp_url: string | null;
+  citations_completed: string[];
+  updated_at: string;
+}
+
+export type LocalSeoPostStatus = "drafted" | "posted";
+
+export interface LocalSeoPost {
+  id: string;
+  org_id: string;
+  post_text: string;
+  keyword_suggestions: string[];
+  status: LocalSeoPostStatus;
+  posted_at: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+// ============================================================================
+// AI Search Visibility (AEO) — a real crawl-based audit of on-page signals
+// AI answer engines rely on, plus an AI-drafted FAQ block for the gaps
+// found. See supabase/migrations/0029-0030.
+// ============================================================================
+export interface AeoFinding {
+  status: "good" | "needs_work" | "missing";
+  area: string;
+  message: string;
+}
+
+export interface AeoAudit {
+  id: string;
+  org_id: string;
+  url: string;
+  score: number;
+  findings: AeoFinding[];
+  faq_draft: string | null;
+  audited_at: string;
+  triggered_by: string | null;
 }
 
 // ============================================================================
