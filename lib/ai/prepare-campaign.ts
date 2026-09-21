@@ -1,4 +1,5 @@
 import { generateText } from "@/lib/ai/provider";
+import { parseAiJsonObject } from "@/lib/ai/parse-json";
 import type { AiUsage } from "@/lib/ai/log-usage";
 import type { AdPlatform, BrandProfile } from "@/types/database";
 
@@ -40,8 +41,7 @@ export async function prepareCampaignDraft(params: {
 
   const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 768 });
 
-  const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  const parsed = parseAiJsonObject(result.text, "Couldn't prepare a clean campaign brief that time — please try again.");
   return {
     audienceDescription: typeof parsed.audienceDescription === "string" ? parsed.audienceDescription : "",
     keywords: Array.isArray(parsed.keywords) ? parsed.keywords.filter((k: unknown) => typeof k === "string") : [],

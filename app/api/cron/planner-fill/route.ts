@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/service";
 import { fillAutopilotBuffer, getBrandAndSettings } from "@/app/app/planner/actions";
 import { checkAutomationAllowed } from "@/lib/automation/guard";
+import { recordCronRun } from "@/lib/admin/cron-log";
 import { MONTHLY_AI_GENERATION_SAFETY_CAP } from "@/lib/constants/content";
 import type { ContentControlMode, ContentPlatform } from "@/types/database";
 
@@ -16,17 +18,18 @@ import type { ContentControlMode, ContentPlatform } from "@/types/database";
 // The "Fill next 7 days now" button (runAutopilotFillAction) is still there
 // for an on-demand top-up of the same buffer — this cron is the steady
 // background drip that keeps it from ever running dry.
-export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+//
+// Every run is recorded in cron_runs (shown on the admin Config Health page).
+// A run counts as failed if it throws, or if any org generated nothing AND hit
+// an error (e.g. the AI key is missing) — previously that case reported
+// success with created: 0, which is exactly how this job could be broken for
+// days without anyone noticing.
+const JOB = "planner-fill";
 
-  const supabase = createServiceClient();
-
+async function fillAllAutopilotOrgs(supabase: SupabaseClient) {
   const { data: systemSettings } = await supabase.from("system_settings").select("emergency_freeze").single();
   if (systemSettings?.emergency_freeze) {
-    return NextResponse.json({ skipped: "emergency_freeze" });
+    return { body: { skipped: "emergency_freeze" }, failedOrgs: 0, firstError: null as string | null };
   }
 
   const { data: autopilotSettings } = await supabase
@@ -36,6 +39,8 @@ export async function GET(request: NextRequest) {
     .eq("master_stop", false);
 
   const results: Record<string, unknown>[] = [];
+  let failedOrgs = 0;
+  let firstError: string | null = null;
 
   for (const settings of autopilotSettings ?? []) {
     const orgId = settings.org_id as string;
@@ -78,7 +83,7 @@ export async function GET(request: NextRequest) {
     const { brand } = await getBrandAndSettings(supabase, orgId);
     const controlMode = settings.content_control_mode as ContentControlMode;
 
-    const { created, bufferDays } = await fillAutopilotBuffer(supabase, {
+    const { created, bufferDays, lastError } = await fillAutopilotBuffer(supabase, {
       orgId,
       userId: owner.user_id as string,
       platforms,
@@ -88,8 +93,40 @@ export async function GET(request: NextRequest) {
       auditSource: "AUTOPILOT",
       force: false,
     });
-    results.push({ orgId, bufferDaysBeforeRefill: bufferDays, created });
+    results.push({ orgId, bufferDaysBeforeRefill: bufferDays, created, error: lastError });
+    if (lastError && created === 0) {
+      failedOrgs += 1;
+      firstError ??= lastError;
+    }
   }
 
-  return NextResponse.json({ date: new Date().toISOString().slice(0, 10), orgs: results });
+  return {
+    body: { date: new Date().toISOString().slice(0, 10), orgs: results },
+    failedOrgs,
+    firstError,
+  };
+}
+
+export async function GET(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const supabase = createServiceClient();
+
+  try {
+    const { body, failedOrgs, firstError } = await fillAllAutopilotOrgs(supabase);
+    const ok = failedOrgs === 0;
+    await recordCronRun(supabase, JOB, {
+      ok,
+      summary: body,
+      error: ok ? null : `${failedOrgs} org(s) generated nothing because of an error: ${firstError}`,
+    });
+    return NextResponse.json(body);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await recordCronRun(supabase, JOB, { ok: false, error: message });
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

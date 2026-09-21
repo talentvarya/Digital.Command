@@ -28,6 +28,10 @@ import {
   EyeOff,
   Octagon,
   CircleDot,
+  Star,
+  MapPin,
+  Bot,
+  Trophy,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { PricingSection } from "@/components/marketing/PricingSection";
@@ -67,6 +71,10 @@ const MODULES = [
   { category: "System", icon: Sparkles, title: "AI Assistant", short: "Approval-aware help across every module.", long: "Ask for reports, edits and plans. The assistant respects your Brand Brain and guardrails." },
   { category: "Measurement", icon: MousePointerClick, title: "Conversions", short: "Trackable link & funnel reporting.", long: "See the journey from click to conversion, with honest gaps where upstream data is missing." },
   { category: "System", icon: HeartPulse, title: "Connection Health", short: "Know exactly what's connected & healthy.", long: "Distinguish connected, healthy, configured, missing, not added, and needs-reconnecting." },
+  { category: "Growth", icon: Star, title: "Reputation Management", short: "Ask for reviews, reply with AI-drafted answers.", long: "Send review requests from your own WhatsApp/SMS/email and post the AI-drafted replies yourself — nothing posts to Google or Facebook automatically." },
+  { category: "Growth", icon: MapPin, title: "Local SEO Toolkit", short: "Keep your name, address and phone consistent.", long: "NAP consistency check, a directory citation checklist, and AI-drafted Google Posts and local keywords you copy onto your own Business Profile." },
+  { category: "Growth", icon: Bot, title: "AI Search Visibility", short: "Be easy for AI answers to quote.", long: "A real audit of the on-page signals ChatGPT, Gemini and Perplexity rely on — FAQ content, structured data, clear business info — plus ready-to-paste fixes." },
+  { category: "Premium", icon: Trophy, title: "Competitor Search", short: "See who shows up on Google Maps, and where you rank.", long: "Real Google Maps results with ratings, reviews and contact info, run on your own Apify account. A premium add-on enabled per account." },
 ];
 
 const STEPS = [
@@ -197,12 +205,12 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 9 modules */}
+      {/* Modules */}
       <section className="bg-ink-50/60 py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="mx-auto mb-12 max-w-2xl text-center">
             <span className="mb-3 inline-block rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-700">
-              One platform, nine modules
+              One platform, {MODULES.length} modules
             </span>
             <h2 className="font-display text-3xl font-bold tracking-tight text-ink-900">
               Everything your organic marketing needs — in command

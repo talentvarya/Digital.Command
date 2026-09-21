@@ -3,6 +3,14 @@ import { CheckCircle2, Circle, Clock } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createClient } from "@/lib/supabase/server";
+import type { OrganizationStatus } from "@/types/database";
+
+const CLOSED_MESSAGES: Partial<Record<OrganizationStatus, string>> = {
+  offboarded:
+    "This account has been closed (offboarded). Your data is kept, not deleted — contact your Digital Command contact if you need an export or want to come back.",
+  paused: "This account is paused. Contact your Digital Command contact to resume it.",
+  expired: "This subscription has expired. Contact your Digital Command contact to renew.",
+};
 
 function StepIcon({ done, active }: { done: boolean; active: boolean }) {
   if (done) return <CheckCircle2 className="h-5 w-5 text-emerald-600" />;
@@ -31,6 +39,27 @@ export default async function PendingPage() {
     .single();
 
   if (org?.status === "active") redirect("/app/dashboard");
+
+  // An offboarded/paused/expired account isn't "waiting for approval" — showing
+  // the registration-review steps to it (which is what every non-active status
+  // used to get) is simply the wrong message.
+  const closedMessage = org?.status ? CLOSED_MESSAGES[org.status as OrganizationStatus] : undefined;
+  if (closedMessage) {
+    return (
+      <main className="mx-auto max-w-xl px-4 py-16">
+        <div className="mb-8 flex justify-center">
+          <Logo />
+        </div>
+        <div className="card">
+          <div className="mb-3 flex items-center justify-between">
+            <h1 className="text-xl font-bold text-ink-900">{org?.legal_name}</h1>
+            {org?.status && <StatusBadge status={org.status} />}
+          </div>
+          <p className="text-sm text-ink-600">{closedMessage}</p>
+        </div>
+      </main>
+    );
+  }
 
   const { data: verification } = await supabase
     .from("business_verifications")

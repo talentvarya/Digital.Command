@@ -1,5 +1,6 @@
 import { generateText } from "@/lib/ai/provider";
 import { AiGenerationError } from "@/lib/ai/client";
+import { parseAiJsonObject } from "@/lib/ai/parse-json";
 import type { AiUsage } from "@/lib/ai/log-usage";
 import type { AeoFinding, BrandProfile } from "@/types/database";
 
@@ -42,13 +43,7 @@ export async function draftAeoFaq(params: {
 
   const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 1024 });
 
-  const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
-  } catch {
-    throw new AiGenerationError("Couldn't generate clean FAQ content that time — please try again.");
-  }
+  const parsed = parseAiJsonObject(result.text, "Couldn't generate clean FAQ content that time — please try again.");
 
   const pairs = Array.isArray(parsed.pairs) ? parsed.pairs : [];
   const faqDraft = pairs

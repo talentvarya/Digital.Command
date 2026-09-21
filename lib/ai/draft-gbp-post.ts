@@ -1,5 +1,5 @@
 import { generateText } from "@/lib/ai/provider";
-import { AiGenerationError } from "@/lib/ai/client";
+import { parseAiJsonObject } from "@/lib/ai/parse-json";
 import type { AiUsage } from "@/lib/ai/log-usage";
 import type { BrandProfile, LocalSeoProfile } from "@/types/database";
 
@@ -33,13 +33,7 @@ export async function draftGbpPost(params: {
 
   const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 768 });
 
-  const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
-  } catch {
-    throw new AiGenerationError("Couldn't generate a clean post that time — please try again.");
-  }
+  const parsed = parseAiJsonObject(result.text, "Couldn't generate a clean post that time — please try again.");
   return {
     postText: typeof parsed.postText === "string" ? parsed.postText : result.text.trim(),
     keywordSuggestions: Array.isArray(parsed.keywordSuggestions) ? parsed.keywordSuggestions.filter((k: unknown) => typeof k === "string") : [],

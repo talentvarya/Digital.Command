@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { EmergencyFreezePanel } from "@/components/admin/EmergencyFreezePanel";
 import { BUSINESS_TYPE_LABELS } from "@/lib/constants/business";
 import { BILLING_TERM_LABELS } from "@/lib/constants/plans";
+import { getConfigChecks, missingRequired } from "@/lib/admin/config-checks";
 import type { OrganizationStatus } from "@/types/database";
 
 export default async function AdminDashboardPage() {
@@ -45,8 +46,19 @@ export default async function AdminDashboardPage() {
     rejected: orgList.filter((o) => o.status === "rejected").length,
   };
 
+  const configProblems = missingRequired(getConfigChecks(process.env));
+
   return (
     <div className="space-y-8">
+      {configProblems.length > 0 && (
+        <Link
+          href="/admin/health"
+          className="block rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 hover:bg-red-100"
+        >
+          {configProblems.length} required deployment setting{configProblems.length > 1 ? "s are" : " is"} missing (
+          {configProblems.map((c) => c.key).join(", ")}) — parts of the app are broken. See Config Health.
+        </Link>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-ink-900">Super Admin Dashboard</h1>

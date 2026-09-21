@@ -1,6 +1,6 @@
 import { generateText } from "@/lib/ai/provider";
 import { estimateAiCostUsd } from "@/lib/constants/ai-pricing";
-import { AiGenerationError } from "@/lib/ai/client";
+import { parseAiJsonObject } from "@/lib/ai/parse-json";
 import type { AiUsage } from "@/lib/ai/log-usage";
 import type { RoadmapPhase } from "@/types/database";
 import type { RoadmapLanguage } from "@/lib/i18n/roadmap";
@@ -80,17 +80,12 @@ export async function generateRoadmap(input: RoadmapLeadInput): Promise<Generate
   // response is invalid JSON, not just short.
   const result = await generateText({ system: systemPrompt(input.language), user: lines.join("\n"), maxTokens: 2048 });
 
-  const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
-  } catch {
-    throw new AiGenerationError(
-      input.language === "hi"
-        ? "Is baar ek saaf roadmap nahi ban paaya — please dubara try karein."
-        : "Couldn't generate a clean roadmap that time — please try again."
-    );
-  }
+  const parsed = parseAiJsonObject(
+    result.text,
+    input.language === "hi"
+      ? "Is baar ek saaf roadmap nahi ban paaya — please dubara try karein."
+      : "Couldn't generate a clean roadmap that time — please try again."
+  );
 
   return {
     currentState: Array.isArray(parsed.currentState) ? parsed.currentState : [],

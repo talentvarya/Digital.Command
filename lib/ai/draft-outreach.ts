@@ -1,4 +1,5 @@
 import { generateText } from "@/lib/ai/provider";
+import { parseAiJsonObject } from "@/lib/ai/parse-json";
 import type { AiUsage } from "@/lib/ai/log-usage";
 import type { BrandProfile, OffPageOpportunity } from "@/types/database";
 import type { PageContent } from "@/lib/web/fetch-page";
@@ -43,8 +44,7 @@ export async function draftOutreachMessage(params: {
 
   const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 512 });
 
-  const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  const parsed = parseAiJsonObject(result.text, "Couldn't draft a clean outreach email that time — please try again.");
   return {
     subject: typeof parsed.subject === "string" ? parsed.subject : "Quick note",
     body: typeof parsed.body === "string" ? parsed.body : result.text,

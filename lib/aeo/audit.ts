@@ -107,7 +107,9 @@ export async function runAeoAudit(baseUrl: string): Promise<AeoAuditResult> {
     score -= 12;
   }
 
-  const reviewWords = /\b(review|rating|testimonial|customers say|★|stars)\b/i;
+  // Plurals matter: "300 reviews" / "customer testimonials" are the normal way
+  // this is written, and a bare \b(review)\b doesn't match "reviews".
+  const reviewWords = /\b(reviews?|ratings?|testimonials?|customers say|stars?)\b|★/i;
   if (reviewWords.test(bodyText)) {
     findings.push({ status: "good", area: "trust_signals", message: "Review/testimonial language found on the page." });
   } else {

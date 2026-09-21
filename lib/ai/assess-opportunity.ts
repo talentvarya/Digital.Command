@@ -1,4 +1,5 @@
 import { generateText } from "@/lib/ai/provider";
+import { parseAiJsonObject } from "@/lib/ai/parse-json";
 import type { AiUsage } from "@/lib/ai/log-usage";
 import type { BrandProfile } from "@/types/database";
 import type { PageContent } from "@/lib/web/fetch-page";
@@ -33,9 +34,10 @@ export async function assessOpportunity(params: {
 
   const result = await generateText({ system: SYSTEM_PROMPT, user: lines.join("\n"), maxTokens: 512 });
 
-  const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
-  const spamRisk = ["low", "medium", "high"].includes(parsed.spamRisk) ? parsed.spamRisk : "medium";
+  const parsed = parseAiJsonObject(result.text, "Couldn't assess that page cleanly — please try again.");
+  const spamRisk = ["low", "medium", "high"].includes(parsed.spamRisk as string)
+    ? (parsed.spamRisk as OpportunityAssessment["spamRisk"])
+    : "medium";
   return {
     relevanceScore: Math.max(0, Math.min(100, Math.round(Number(parsed.relevanceScore) || 0))),
     qualityNotes: typeof parsed.qualityNotes === "string" ? parsed.qualityNotes : "No assessment notes returned.",
