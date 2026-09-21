@@ -41,7 +41,7 @@ Supabase → SQL Editor → paste the **contents** of each file (never the file 
 
 `0001` → `0036` in `supabase/migrations/`. The latest four (`0033` Buffer insights, `0034` protected `client_settings` columns, `0035` cron log, `0036` AI-answer checks) are safe to re-run.
 
-After the migrations, run `supabase/tests/tenant_isolation_test.sql` **on its own** (it ends in a deliberate error whose text is the report): expect `PASS`, and the admin-column line to read `PROTECTED`. This is the empirical two-client isolation check; run it again after any change to policies. (The same test also runs automatically on every push against an in-memory copy built from the migration files — that catches a bad migration, but only this live run can see a difference between the files and the real project.)
+After the migrations, run `supabase/tests/tenant_isolation_test.sql` (as its own query or pasted right after them — both are safe). It returns a result table: expect `Cross-tenant leaks found: 0`, the admin-column line to read `PROTECTED`, and the last line `RESULT: PASS`. `FAIL`, `NOT RUN` or `TEST INVALID` mean something needs a look. This is the empirical two-client isolation check; run it again after any change to policies. Last live result (2026-09-22): PASS on 36 tables. (The same test also runs automatically on every push against an in-memory copy built from the migration files — that catches a bad migration, but only this live run can see a difference between the files and the real project.)
 
 ## 4. Post-deploy checks
 

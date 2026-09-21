@@ -68,20 +68,23 @@ export function migrationFiles(): string[] {
     .sort();
 }
 
-export async function runMigration(db: PGlite, file: string): Promise<void> {
-  // pgcrypto isn't shipped with PGlite and nothing needs it (gen_random_uuid() is core).
-  const sql = fs
+// pgcrypto isn't shipped with PGlite and nothing needs it (gen_random_uuid() is core).
+export function readMigration(file: string): string {
+  return fs
     .readFileSync(path.join(MIGRATIONS_DIR, file), "utf8")
     .replace(/create extension if not exists "pgcrypto";/i, "-- (pgcrypto skipped in this harness)");
+}
+
+export async function runMigration(db: PGlite, file: string): Promise<void> {
   try {
-    await db.exec(sql);
+    await db.exec(readMigration(file));
   } catch (err) {
     throw new Error(`Migration ${file} failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
-export async function applyMigrations(db: PGlite): Promise<string[]> {
-  const files = migrationFiles();
+export async function applyMigrations(db: PGlite, only: (file: string) => boolean = () => true): Promise<string[]> {
+  const files = migrationFiles().filter(only);
   for (const f of files) await runMigration(db, f);
   return files;
 }
@@ -201,13 +204,12 @@ export async function seedTwoTenants(db: PGlite): Promise<{ tables: string[]; un
   return { tables, unseeded: tables.filter((t) => !done.has(`${t}:A`) || !done.has(`${t}:B`)) };
 }
 
-// tenant_isolation_test.sql ends by raising an exception whose text is the
-// report (so nothing it does is ever committed) — return that text.
-export async function runIsolationReport(db: PGlite): Promise<string> {
-  try {
-    await db.exec(ISOLATION_TEST_SQL);
-  } catch (err) {
-    return err instanceof Error ? err.message : String(err);
-  }
-  throw new Error("tenant_isolation_test.sql finished without raising its report — it is meant to always end in an exception.");
+// tenant_isolation_test.sql never raises: its last statement is a SELECT that
+// returns the report one line per row. Pass `sql` to run it after other
+// statements in the same query (how it gets pasted next to the migrations).
+export async function runIsolationReport(db: PGlite, sql: string = ISOLATION_TEST_SQL): Promise<string> {
+  const results = await db.exec(sql);
+  const rows = (results[results.length - 1]?.rows ?? []) as { report: string }[];
+  if (rows.length === 0) throw new Error("tenant_isolation_test.sql returned no report lines.");
+  return rows.map((r) => r.report).join("\n");
 }
