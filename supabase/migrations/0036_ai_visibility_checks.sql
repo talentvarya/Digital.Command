@@ -7,7 +7,8 @@
 -- (see lib/apify/ai-visibility.ts). raw keeps the engine's payload exactly as
 -- returned: it is the evidence needed to verify and later add the engines
 -- whose output format isn't documented (ChatGPT, Perplexity, Gemini...).
-create table public.ai_visibility_checks (
+-- Safe to run more than once.
+create table if not exists public.ai_visibility_checks (
   id uuid primary key default gen_random_uuid(),
   org_id uuid not null references public.organizations (id) on delete cascade,
   query text not null,
@@ -23,11 +24,13 @@ create table public.ai_visibility_checks (
   triggered_by uuid references public.profiles (id)
 );
 
-create index ai_visibility_checks_org_id_idx on public.ai_visibility_checks (org_id, run_at desc);
+create index if not exists ai_visibility_checks_org_id_idx on public.ai_visibility_checks (org_id, run_at desc);
 
 alter table public.ai_visibility_checks enable row level security;
 
+drop policy if exists ai_visibility_checks_select on public.ai_visibility_checks;
 create policy ai_visibility_checks_select on public.ai_visibility_checks
   for select using (public.is_org_member(org_id) or public.is_super_admin());
+drop policy if exists ai_visibility_checks_insert on public.ai_visibility_checks;
 create policy ai_visibility_checks_insert on public.ai_visibility_checks
   for insert with check (public.is_org_member(org_id));

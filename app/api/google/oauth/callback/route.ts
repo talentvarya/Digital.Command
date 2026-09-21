@@ -5,6 +5,7 @@ import { exchangeCodeForTokens } from "@/lib/google/oauth";
 import { requireOrgMember } from "@/lib/auth/require-org-member";
 import { logAudit } from "@/lib/audit/log";
 import { isGoogleService } from "@/lib/constants/google";
+import { encryptSecret } from "@/lib/security/secret-box";
 
 export async function GET(request: NextRequest) {
   const seoUrl = new URL("/app/seo", request.url);
@@ -52,8 +53,10 @@ export async function GET(request: NextRequest) {
       {
         org_id: member.orgId,
         service,
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token ?? existing?.refresh_token ?? null,
+        access_token: encryptSecret(tokens.access_token),
+        // A fresh grant is encrypted; the previously stored one (already in its
+        // own form — encrypted or legacy plain text) is carried over untouched.
+        refresh_token: tokens.refresh_token ? encryptSecret(tokens.refresh_token) : (existing?.refresh_token ?? null),
         token_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
         status: "connected",
         updated_at: new Date().toISOString(),

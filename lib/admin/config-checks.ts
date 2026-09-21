@@ -78,6 +78,14 @@ export function getConfigChecks(env: Env): ConfigCheck[] {
       ifMissing: "Search Console, Analytics and YouTube can't be connected.",
     },
     {
+      key: "TOKEN_ENCRYPTION_KEY",
+      label: "Token encryption key",
+      required: false,
+      set: has(env, "TOKEN_ENCRYPTION_KEY"),
+      ifMissing:
+        "Google and Apify tokens saved from now on are stored as readable text in the database instead of encrypted (recommended).",
+    },
+    {
       key: "UNSPLASH_ACCESS_KEY",
       label: "Unsplash access key",
       required: false,

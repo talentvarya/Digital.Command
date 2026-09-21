@@ -6,7 +6,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { EmergencyFreezePanel } from "@/components/admin/EmergencyFreezePanel";
 import { BUSINESS_TYPE_LABELS } from "@/lib/constants/business";
 import { BILLING_TERM_LABELS } from "@/lib/constants/plans";
-import { getConfigChecks, missingRequired } from "@/lib/admin/config-checks";
+import { cronHealth, getConfigChecks, missingRequired, CRON_STALE_AFTER_HOURS } from "@/lib/admin/config-checks";
+import { getLastCronRun } from "@/lib/admin/cron-log";
 import type { OrganizationStatus } from "@/types/database";
 
 export default async function AdminDashboardPage() {
@@ -48,6 +49,11 @@ export default async function AdminDashboardPage() {
 
   const configProblems = missingRequired(getConfigChecks(process.env));
 
+  // "Never run" and a missing log table are left to the Config Health page —
+  // only a run that actually failed, or a job that has gone quiet, is worth a banner.
+  const { last: lastFill } = await getLastCronRun(supabase, "planner-fill");
+  const fillHealth = cronHealth(lastFill ? { ran_at: lastFill.ran_at, ok: lastFill.ok } : null);
+
   return (
     <div className="space-y-8">
       {configProblems.length > 0 && (
@@ -57,6 +63,24 @@ export default async function AdminDashboardPage() {
         >
           {configProblems.length} required deployment setting{configProblems.length > 1 ? "s are" : " is"} missing (
           {configProblems.map((c) => c.key).join(", ")}) — parts of the app are broken. See Config Health.
+        </Link>
+      )}
+      {fillHealth === "failed" && (
+        <Link
+          href="/admin/health"
+          className="block rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 hover:bg-red-100"
+        >
+          The nightly Autopilot job&apos;s last run failed{lastFill?.error ? ` (${lastFill.error})` : ""} — clients&apos; planners
+          may not be topping up. See Config Health.
+        </Link>
+      )}
+      {fillHealth === "stale" && (
+        <Link
+          href="/admin/health"
+          className="block rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 hover:bg-amber-100"
+        >
+          The nightly Autopilot job hasn&apos;t run in over {CRON_STALE_AFTER_HOURS} hours — clients&apos; planners may not be
+          topping up. See Config Health.
         </Link>
       )}
       <div className="flex flex-wrap items-start justify-between gap-4">

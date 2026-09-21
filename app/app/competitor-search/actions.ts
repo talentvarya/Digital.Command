@@ -6,7 +6,8 @@ import { requireOrgMember } from "@/lib/auth/require-org-member";
 import { logAudit } from "@/lib/audit/log";
 import { checkAutomationAllowed } from "@/lib/automation/guard";
 import { runCompetitorSearch, ApifyError } from "@/lib/apify/client";
-import { requirePremiumApify } from "@/lib/apify/access";
+import { getConnectedApifyToken, requirePremiumApify } from "@/lib/apify/access";
+import { encryptSecret } from "@/lib/security/secret-box";
 import type { ActionResult } from "@/app/register/actions";
 
 function refresh() {
@@ -26,7 +27,7 @@ export async function saveApifyTokenAction(_prevState: ActionResult, formData: F
 
   const { error } = await supabase.from("apify_connections").upsert({
     org_id: member.orgId,
-    api_token: apiToken,
+    api_token: encryptSecret(apiToken),
     status: "connected",
     connected_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -76,13 +77,11 @@ export async function runCompetitorSearchAction(_prevState: ActionResult, formDa
   if (!query) return { error: "Enter what you'd search for (e.g. \"chocolate shop\")." };
   if (!location) return { error: "Enter a location (e.g. \"Pune, India\")." };
 
-  const [{ data: connection }, { data: websiteLink }] = await Promise.all([
-    supabase.from("apify_connections").select("api_token, status").eq("org_id", member.orgId).maybeSingle(),
+  const [apiToken, { data: websiteLink }] = await Promise.all([
+    getConnectedApifyToken(supabase, member.orgId),
     supabase.from("org_links").select("url").eq("org_id", member.orgId).eq("link_type", "website").maybeSingle(),
   ]);
-  if (!connection?.api_token || connection.status !== "connected") {
-    return { error: "Connect your Apify account first." };
-  }
+  if (!apiToken) return { error: "Connect your Apify account first." };
 
   let ownDomain: string | null = null;
   if (websiteLink?.url) {
@@ -95,7 +94,7 @@ export async function runCompetitorSearchAction(_prevState: ActionResult, formDa
 
   let result;
   try {
-    result = await runCompetitorSearch({ apiToken: connection.api_token, query, location, ownDomain });
+    result = await runCompetitorSearch({ apiToken, query, location, ownDomain });
   } catch (err) {
     if (err instanceof ApifyError) {
       await supabase.from("apify_connections").update({ status: "error", updated_at: new Date().toISOString() }).eq("org_id", member.orgId);

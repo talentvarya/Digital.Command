@@ -1,6 +1,7 @@
 import { CheckCircle2, XCircle, AlertTriangle, Clock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { cronHealth, getConfigChecks, missingRequired, type CronHealth } from "@/lib/admin/config-checks";
+import { getLastCronRun } from "@/lib/admin/cron-log";
 
 const CRON_JOBS = [{ job: "planner-fill", label: "Autopilot planner fill (nightly)" }];
 
@@ -19,16 +20,7 @@ export default async function AdminConfigHealthPage() {
   const problems = missingRequired(checks);
 
   const runs = await Promise.all(
-    CRON_JOBS.map(async ({ job, label }) => {
-      const { data, error } = await supabase
-        .from("cron_runs")
-        .select("ran_at, ok, error, summary")
-        .eq("job", job)
-        .order("ran_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return { job, label, last: data, tableMissing: Boolean(error) };
-    })
+    CRON_JOBS.map(async ({ job, label }) => ({ job, label, ...(await getLastCronRun(supabase, job)) }))
   );
 
   return (

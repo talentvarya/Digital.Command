@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { encryptSecret, tryDecryptSecret } from "@/lib/security/secret-box";
 import type { GoogleService } from "@/types/database";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -84,7 +85,9 @@ export async function revokeGoogleToken(token: string): Promise<void> {
 }
 
 // Server-only: reads and, if needed, refreshes the stored token. Never call
-// this from anything that returns its result to a Client Component.
+// this from anything that returns its result to a Client Component. Stored
+// tokens are decrypted on the way out and re-encrypted on refresh; one that
+// can't be decrypted reads as "no token" rather than throwing.
 export async function getValidAccessToken(
   supabase: SupabaseClient,
   orgId: string,
@@ -101,17 +104,18 @@ export async function getValidAccessToken(
 
   const expiresAt = connection.token_expires_at ? new Date(connection.token_expires_at).getTime() : 0;
   if (expiresAt > Date.now() + 60_000) {
-    return connection.access_token;
+    return tryDecryptSecret(connection.access_token);
   }
 
-  if (!connection.refresh_token) return null;
+  const refreshToken = tryDecryptSecret(connection.refresh_token);
+  if (!refreshToken) return null;
 
   try {
-    const refreshed = await refreshAccessToken(connection.refresh_token);
+    const refreshed = await refreshAccessToken(refreshToken);
     await supabase
       .from("google_connections")
       .update({
-        access_token: refreshed.access_token,
+        access_token: encryptSecret(refreshed.access_token),
         token_expires_at: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
         status: "connected",
         updated_at: new Date().toISOString(),

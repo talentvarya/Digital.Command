@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireSuperAdmin } from "@/lib/auth/require-super-admin";
 import { logAudit } from "@/lib/audit/log";
 import { revokeGoogleToken } from "@/lib/google/oauth";
+import { tryDecryptSecret } from "@/lib/security/secret-box";
 import type { ActionResult } from "@/app/register/actions";
 
 function refresh(orgId: string) {
@@ -177,13 +178,16 @@ export async function offboardOrgAction(_prevState: ActionResult, formData: Form
     .eq("org_id", orgId);
   let revokeFailures = 0;
   for (const conn of connections ?? []) {
-    const token = conn.refresh_token || conn.access_token;
+    // Stored tokens may be encrypted; Google needs the real value to revoke.
+    const token = tryDecryptSecret(conn.refresh_token) ?? tryDecryptSecret(conn.access_token);
     if (token) {
       try {
         await revokeGoogleToken(token);
       } catch {
         revokeFailures++;
       }
+    } else if (conn.refresh_token || conn.access_token) {
+      revokeFailures++; // a token was stored but couldn't be read, so it was not revoked at Google
     }
     await supabase.from("google_connections").delete().eq("id", conn.id);
   }

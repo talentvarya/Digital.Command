@@ -7,7 +7,8 @@
 -- Config Health page shows the last run per job and flags a failed or overdue
 -- one. Written only by server code using the service-role key (no insert
 -- policy for any logged-in role); readable by Super Admin only.
-create table public.cron_runs (
+-- Safe to run more than once.
+create table if not exists public.cron_runs (
   id uuid primary key default gen_random_uuid(),
   job text not null,
   ran_at timestamptz not null default now(),
@@ -16,9 +17,10 @@ create table public.cron_runs (
   error text
 );
 
-create index cron_runs_job_ran_at_idx on public.cron_runs (job, ran_at desc);
+create index if not exists cron_runs_job_ran_at_idx on public.cron_runs (job, ran_at desc);
 
 alter table public.cron_runs enable row level security;
 
+drop policy if exists cron_runs_admin_select on public.cron_runs;
 create policy cron_runs_admin_select on public.cron_runs
   for select using (public.is_super_admin());
