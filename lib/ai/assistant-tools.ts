@@ -6,6 +6,7 @@ import type { AiUsage } from "@/lib/ai/log-usage";
 import { logAudit } from "@/lib/audit/log";
 import { checkAutomationAllowed } from "@/lib/automation/guard";
 import { REJECTIONS_BEFORE_SUGGESTION, MONTHLY_AI_GENERATION_SAFETY_CAP } from "@/lib/constants/content";
+import { normalizeSlotTime } from "@/lib/publishing/schedule";
 import type { BrandProfile, ContentPlatform } from "@/types/database";
 
 export interface AssistantContext {
@@ -127,7 +128,10 @@ async function findContentItem(
     // Post-2-per-day, date+platform alone can be ambiguous (Morning + Evening)
     // — surface each match's slot so the model can ask "morning or evening?"
     // and re-call with `time` instead of guessing.
-    const descriptions = data.map((i) => `${i.platform}${i.scheduled_time ? ` at ${i.scheduled_time}` : " (no time set)"}`).join(", ");
+    // The database returns `time` values as "09:00:00" — show the slot as 09:00.
+    const descriptions = data
+      .map((i) => `${i.platform}${i.scheduled_time ? ` at ${normalizeSlotTime(i.scheduled_time) ?? i.scheduled_time}` : " (no time set)"}`)
+      .join(", ");
     return { error: `More than one item matches (${descriptions}) — ask which platform and/or time (09:00 morning or 18:00 evening), then call again with both.` };
   }
   return { item: data[0] };

@@ -12,11 +12,14 @@ import { logAiUsage } from "@/lib/ai/log-usage";
 import {
   REJECTIONS_BEFORE_SUGGESTION,
   MONTHLY_AI_GENERATION_SAFETY_CAP,
+  PLATFORM_LABELS,
   TIME_SLOTS,
   AUTOPILOT_BUFFER_DAYS,
   AUTOPILOT_REFILL_AT_DAYS,
 } from "@/lib/constants/content";
 import { dispatchToPublisher } from "@/lib/publishing/dispatch";
+import { resolveDueAt } from "@/lib/publishing/schedule";
+import { computeBufferState, slotKey } from "@/lib/planner/buffer";
 import { attachUnsplashPhoto, captionToImageQuery } from "@/lib/unsplash/attach";
 import { getBufferPostStatus, getBufferPostMetrics, BufferApiError } from "@/lib/buffer/client";
 import { getValidAccessToken } from "@/lib/google/oauth";
@@ -330,18 +333,18 @@ export async function fillAutopilotBuffer(
     .eq("org_id", orgId)
     .gte("scheduled_date", days[0])
     .lte("scheduled_date", days[days.length - 1]);
-  const filled = new Set(
-    (existing ?? []).map((i) => `${i.scheduled_date}:${i.platform}:${i.scheduled_time ?? TIME_SLOTS[0].value}`)
-  );
 
   // How many consecutive days, starting today, already have every selected
-  // platform/slot filled — the actual size of the current buffer.
-  let bufferDays = 0;
-  for (const date of days) {
-    const complete = platforms.every((p) => TIME_SLOTS.every((slot) => filled.has(`${date}:${p}:${slot.value}`)));
-    if (!complete) break;
-    bufferDays += 1;
-  }
+  // platform/slot filled — the actual size of the current buffer. (See
+  // computeBufferState for why slot times are normalised before comparing.)
+  const slotIsPast = (date: string, time: string) => !resolveDueAt({ scheduled_date: date, scheduled_time: time }).ok;
+  const { filled, bufferDays } = computeBufferState({
+    existing: existing ?? [],
+    days,
+    platforms,
+    slotTimes: TIME_SLOTS.map((s) => s.value),
+    isPast: slotIsPast,
+  });
 
   if (!params.force && bufferDays > AUTOPILOT_REFILL_AT_DAYS) {
     return { created: 0, bufferDays, lastError: null };
@@ -353,7 +356,8 @@ export async function fillAutopilotBuffer(
     for (const platform of platforms) {
       for (const slot of TIME_SLOTS) {
         if (remaining <= 0) break;
-        if (filled.has(`${date}:${platform}:${slot.value}`)) continue;
+        if (filled.has(slotKey(date, platform, slot.value, TIME_SLOTS[0].value))) continue;
+        if (slotIsPast(date, slot.value)) continue; // a slot that has already gone can't be posted into
 
         const result = await generateOneSlot(supabase, {
           orgId,
@@ -810,6 +814,92 @@ export async function checkPublishStatusAction(_prevState: ActionResult, formDat
   }
 
   refresh();
+  return {};
+}
+
+// ============================================================================
+// "Send now" / "Retry" for a scheduled post that hasn't actually gone out —
+// approved before a channel was linked, approved during a Master STOP, or one
+// that hit a publish error. Before this existed such a post stayed at
+// "not sent" forever: nothing ever tried again.
+// ============================================================================
+export async function sendNowAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
+  const supabase = createClient();
+  const member = await requireOrgMember(supabase);
+  if ("error" in member) return member;
+
+  const id = formData.get("id") as string;
+  const { data: item } = await supabase.from("content_items").select("*").eq("id", id).single();
+  if (!item) return { error: "Content item not found." };
+  if (item.status !== "scheduled") return { error: "Approve the post first — only scheduled posts can be sent." };
+  if (item.publish_status === "sent") return { error: "This post has already been sent." };
+
+  const result = await dispatchToPublisher(supabase, item as ContentItem);
+  refresh();
+
+  switch (result.outcome) {
+    case "sent":
+      return {};
+    case "no_channel":
+      return {
+        error: `No ${PLATFORM_LABELS[item.platform as ContentPlatform]} channel is linked yet. Your Digital Command contact links it from the admin panel, and your scheduled posts are then sent automatically.`,
+      };
+    case "not_connected":
+      return { error: "Connect your YouTube channel first (SEO page, Connected Services)." };
+    case "paused":
+      return { error: result.message };
+    case "past":
+      return { error: "The scheduled time has already passed — reschedule it to a future time, then send again." };
+    case "skipped":
+      return { error: "Nothing to send for this post." };
+    case "error":
+      return { error: result.message };
+  }
+}
+
+// ============================================================================
+// Refresh engagement insights for every published Facebook/Instagram post in
+// the window being viewed, in one click (capped, sequential — Buffer's API is
+// one call per post).
+// ============================================================================
+export async function syncAllInsightsAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
+  const supabase = createClient();
+  const member = await requireOrgMember(supabase);
+  if ("error" in member) return member;
+
+  const startDate = formData.get("startDate") as string;
+  const endDate = formData.get("endDate") as string;
+  if (!startDate || !endDate) return { error: "Missing date range." };
+
+  const { data: items } = await supabase
+    .from("content_items")
+    .select("id, buffer_post_id")
+    .eq("org_id", member.orgId)
+    .eq("status", "published")
+    .not("buffer_post_id", "is", null)
+    .gte("scheduled_date", startDate)
+    .lte("scheduled_date", endDate)
+    .limit(25);
+  if (!items?.length) return { error: "No published Facebook/Instagram posts in this view yet." };
+
+  let synced = 0;
+  let lastError: string | null = null;
+  for (const item of items) {
+    try {
+      const metrics = await getBufferPostMetrics(item.buffer_post_id as string);
+      await supabase
+        .from("content_items")
+        .update({ insights: metrics.metrics, insights_synced_at: new Date().toISOString() })
+        .eq("id", item.id);
+      synced += 1;
+    } catch (err) {
+      if (!(err instanceof BufferApiError)) throw err;
+      lastError = err.message;
+    }
+  }
+
+  refresh();
+  if (synced === 0 && lastError) return { error: lastError };
   return {};
 }
 

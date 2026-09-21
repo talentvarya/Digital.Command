@@ -17,9 +17,11 @@ import {
   addContentMediaAction,
   removeContentMediaAction,
   checkPublishStatusAction,
+  sendNowAction,
   syncPostInsightsAction,
   restoreContentVersionAction,
 } from "@/app/app/planner/actions";
+import { normalizeSlotTime } from "@/lib/publishing/schedule";
 import { PLATFORM_LABELS, REJECTIONS_BEFORE_SUGGESTION } from "@/lib/constants/content";
 import type { ContentItem, ContentVersion } from "@/types/database";
 import type { ContentMediaWithUrl } from "@/app/app/planner/page";
@@ -39,6 +41,22 @@ const VERSION_LABELS: Record<string, string> = {
   gpt_assistant: "AI Assistant",
   restored: "Restored",
 };
+
+function SendNowButton({ id, label }: { id: string; label: string }) {
+  return (
+    <ActionForm action={sendNowAction}>
+      {(state) => (
+        <>
+          <input type="hidden" name="id" value={id} />
+          <SubmitButton className="text-brand-600 underline" pendingLabel="Sending…">
+            {label}
+          </SubmitButton>
+          <FormError message={state.error} />
+        </>
+      )}
+    </ActionForm>
+  );
+}
 
 export function ContentItemCard({ item, media, versions }: { item: ContentItem; media: ContentMediaWithUrl[]; versions: ContentVersion[] }) {
   const [editing, setEditing] = useState(false);
@@ -60,13 +78,16 @@ export function ContentItemCard({ item, media, versions }: { item: ContentItem; 
         <StatusBadge status={item.status} />
         <span className="text-xs text-ink-400">{SOURCE_LABELS[item.source]}</span>
         {item.locked && <Lock className="h-3.5 w-3.5 text-ink-400" />}
-        {item.scheduled_time && <span className="text-xs text-ink-400">{item.scheduled_time}</span>}
+        {item.scheduled_time && <span className="text-xs text-ink-400">{normalizeSlotTime(item.scheduled_time)}</span>}
       </div>
 
       {(item.status === "scheduled" || item.status === "published") && (
-        <div className="mb-2 flex items-center gap-2 text-xs">
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
           {item.publish_status === "not_sent" && (
-            <span className="text-ink-400">Not sent yet — connect a publishing channel to send automatically.</span>
+            <>
+              <span className="text-ink-400">Not sent yet — it goes out automatically once a publishing channel is connected.</span>
+              {item.status === "scheduled" && <SendNowButton id={item.id} label="Send now" />}
+            </>
           )}
           {item.publish_status === "sent" && item.status !== "published" && (
             <>
@@ -86,7 +107,10 @@ export function ContentItemCard({ item, media, versions }: { item: ContentItem; 
           )}
           {item.status === "published" && <span className="text-emerald-700">Published ✓</span>}
           {item.publish_status === "error" && (
-            <span className="text-red-600">Publish error: {item.publish_error}</span>
+            <>
+              <span className="text-red-600">Publish error: {item.publish_error}</span>
+              {item.status === "scheduled" && <SendNowButton id={item.id} label="Retry" />}
+            </>
           )}
         </div>
       )}
@@ -338,7 +362,7 @@ export function ContentItemCard({ item, media, versions }: { item: ContentItem; 
               </div>
               <div>
                 <label className="field-label">Time (optional)</label>
-                <input className="field-input" type="time" name="scheduledTime" defaultValue={item.scheduled_time ?? ""} />
+                <input className="field-input" type="time" name="scheduledTime" defaultValue={normalizeSlotTime(item.scheduled_time) ?? ""} />
               </div>
               <SubmitButton className="btn-primary px-3 py-2 text-sm">Save</SubmitButton>
               <FormError message={state.error} />

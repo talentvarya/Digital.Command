@@ -4,6 +4,8 @@ import { ControlModeBar } from "@/components/planner/ControlModeBar";
 import { DayCard } from "@/components/planner/DayCard";
 import { WindowSelector } from "@/components/planner/WindowSelector";
 import { ClearPlannerButton } from "@/components/planner/ClearPlannerButton";
+import { InsightsSummary } from "@/components/planner/InsightsSummary";
+import { summarizeInsights } from "@/lib/planner/insights";
 import { PLANNER_WINDOW_OPTIONS, type PlannerWindow } from "@/lib/constants/content";
 import type { ContentMedia, ContentVersion } from "@/types/database";
 
@@ -85,6 +87,15 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
     versionsByItem.set(v.content_item_id, list);
   });
 
+  const insights = summarizeInsights(
+    (items ?? []).map((i) => ({
+      status: i.status,
+      buffer_post_id: i.buffer_post_id,
+      insights: i.insights ?? [],
+      insights_synced_at: i.insights_synced_at,
+    }))
+  );
+
   const itemsByDay = new Map<string, typeof items>();
   (items ?? []).forEach((item) => {
     const list = itemsByDay.get(item.scheduled_date) ?? [];
@@ -98,8 +109,9 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
         <div>
           <h1 className="mb-1 text-2xl font-bold text-ink-900">Content Planner</h1>
           <p className="text-sm text-ink-500">
-            Content reaches <span className="font-medium text-ink-700">&quot;Scheduled&quot;</span> here — actual
-            publishing to Facebook/Instagram/YouTube arrives in a later phase.
+            Approved posts become <span className="font-medium text-ink-700">&quot;Scheduled&quot;</span> and are sent
+            to Facebook/Instagram (via Buffer) or uploaded to YouTube once a publishing channel is connected. Times are
+            in Indian Standard Time.
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -113,6 +125,17 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
         approvalThenAutopilot={settings?.approval_then_autopilot ?? false}
         autopilotPlatforms={settings?.autopilot_platforms ?? []}
       />
+
+      {insights.publishedCount > 0 && (
+        <InsightsSummary
+          startDate={days[0]}
+          endDate={days[days.length - 1]}
+          publishedCount={insights.publishedCount}
+          syncedCount={insights.syncedCount}
+          totals={insights.totals}
+          lastSyncedAt={insights.lastSyncedAt}
+        />
+      )}
 
       <div className="space-y-4">
         {days.map((date) => (
