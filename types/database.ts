@@ -679,6 +679,22 @@ export interface AeoFinding {
   message: string;
 }
 
+// One row per (query, engine) per run — see supabase/migrations/0036.
+export interface AiVisibilityCheck {
+  id: string;
+  org_id: string;
+  query: string;
+  engine: string;
+  answered: boolean;
+  brand_mentioned: boolean;
+  brand_cited: boolean;
+  competitors_mentioned: string[];
+  excerpt: string | null;
+  sources: { title: string | null; url: string }[];
+  run_at: string;
+  triggered_by: string | null;
+}
+
 export interface AeoAudit {
   id: string;
   org_id: string;

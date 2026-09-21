@@ -6,6 +6,9 @@ import { CompetitorSearchForm } from "@/components/competitor-search/CompetitorS
 import { SnapshotCard } from "@/components/competitor-search/SnapshotCard";
 import type { ApifyConnectionPublic, ApifySearchSnapshot } from "@/types/database";
 
+// A live Apify Maps run takes ~10-30s; the default serverless limit can be shorter.
+export const maxDuration = 60;
+
 export default async function CompetitorSearchPage() {
   const supabase = createClient();
   const {

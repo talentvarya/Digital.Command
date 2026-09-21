@@ -37,27 +37,34 @@ function extractDomain(url: string): string | null {
 
 export class ApifyError extends Error {}
 
-export async function runCompetitorSearch(params: {
-  apiToken: string;
-  query: string;
-  location: string;
-  ownDomain: string | null;
-}): Promise<CompetitorSearchResult> {
-  const { apiToken, query, location, ownDomain } = params;
+// Stays under the 60s page/server-action limit (see the maxDuration exports on
+// the pages that call this) so a slow run surfaces as a clear message instead
+// of the platform killing the request mid-flight.
+const RUN_TIMEOUT_MS = 55_000;
 
-  const res = await fetch(
-    `https://api.apify.com/v2/acts/${GOOGLE_MAPS_SCRAPER_ACTOR_ID}/run-sync-get-dataset-items?token=${encodeURIComponent(apiToken)}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        searchStringsArray: [query],
-        locationQuery: location,
-        maxCrawledPlacesPerSearch: 20,
-        language: "en",
-      }),
+// One place that runs an Apify actor synchronously and returns its dataset
+// items — auth, error messages, and the timeout live here so every Apify
+// feature behaves the same way.
+export async function apifyRunSync<T>(actorId: string, apiToken: string, input: unknown): Promise<T[]> {
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${encodeURIComponent(apiToken)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+        signal: AbortSignal.timeout(RUN_TIMEOUT_MS),
+      }
+    );
+  } catch (err) {
+    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      throw new ApifyError(
+        "Apify took longer than a minute to answer. The run may still finish on your Apify account (and be billed) — check the Runs tab at apify.com."
+      );
     }
-  );
+    throw err;
+  }
 
   if (!res.ok) {
     let message = `Apify request failed (HTTP ${res.status})`;
@@ -71,7 +78,18 @@ export async function runCompetitorSearch(params: {
     throw new ApifyError(message);
   }
 
-  const items = (await res.json()) as Array<{
+  return (await res.json()) as T[];
+}
+
+export async function runCompetitorSearch(params: {
+  apiToken: string;
+  query: string;
+  location: string;
+  ownDomain: string | null;
+}): Promise<CompetitorSearchResult> {
+  const { apiToken, query, location, ownDomain } = params;
+
+  const items = await apifyRunSync<{
     rank?: number;
     title?: string;
     categoryName?: string;
@@ -81,7 +99,12 @@ export async function runCompetitorSearch(params: {
     totalScore?: number;
     reviewsCount?: number;
     url?: string;
-  }>;
+  }>(GOOGLE_MAPS_SCRAPER_ACTOR_ID, apiToken, {
+    searchStringsArray: [query],
+    locationQuery: location,
+    maxCrawledPlacesPerSearch: 20,
+    language: "en",
+  });
 
   const topResults: ApifyMapsResult[] = items
     .filter((r) => r.title)

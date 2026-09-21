@@ -6,18 +6,11 @@ import { requireOrgMember } from "@/lib/auth/require-org-member";
 import { logAudit } from "@/lib/audit/log";
 import { checkAutomationAllowed } from "@/lib/automation/guard";
 import { runCompetitorSearch, ApifyError } from "@/lib/apify/client";
+import { requirePremiumApify } from "@/lib/apify/access";
 import type { ActionResult } from "@/app/register/actions";
 
 function refresh() {
   revalidatePath("/app/competitor-search");
-}
-
-async function requirePremiumApify(supabase: ReturnType<typeof createClient>, orgId: string): Promise<ActionResult | null> {
-  const { data } = await supabase.from("client_settings").select("premium_apify_enabled").eq("org_id", orgId).maybeSingle();
-  if (!data?.premium_apify_enabled) {
-    return { error: "Competitor Search is a premium add-on — ask your Digital Command contact to enable it for your account." };
-  }
-  return null;
 }
 
 export async function saveApifyTokenAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {

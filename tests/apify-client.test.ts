@@ -53,6 +53,16 @@ describe("runCompetitorSearch", () => {
     await expect(runCompetitorSearch(params)).rejects.toThrow("Apify API token is invalid or expired.");
   });
 
+  it("turns a timeout into a clear message that warns the run may still be billed", async () => {
+    const timeout = new Error("The operation was aborted due to timeout");
+    timeout.name = "TimeoutError";
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(timeout));
+    const err = await runCompetitorSearch(params).catch((e) => e);
+    expect(err).toBeInstanceOf(ApifyError);
+    expect(err.message).toContain("longer than a minute");
+    expect(err.message).toContain("billed");
+  });
+
   it("surfaces Apify's own error message (e.g. out of credits) as an ApifyError", async () => {
     stubFetch({ error: { message: "Not enough credits" } }, 402);
     const err = await runCompetitorSearch(params).catch((e) => e);

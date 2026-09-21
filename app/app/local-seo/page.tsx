@@ -6,6 +6,7 @@ import { CitationChecklist } from "@/components/local-seo/CitationChecklist";
 import { GbpPostCard } from "@/components/local-seo/GbpPostCard";
 import { DraftGbpPostButton } from "@/components/local-seo/DraftGbpPostButton";
 import { LOCAL_CITATION_DIRECTORIES } from "@/lib/constants/local-seo";
+import { getNapFields } from "@/lib/visibility/nap";
 import type { LocalSeoPost, LocalSeoProfile } from "@/types/database";
 
 export default async function LocalSeoPage() {
@@ -32,12 +33,7 @@ export default async function LocalSeoPage() {
   const localProfile = (profile as LocalSeoProfile | null) ?? null;
   const postList = (posts as LocalSeoPost[] | null) ?? [];
 
-  const napFields = [
-    { label: "Address (Local SEO profile)", filled: Boolean(localProfile?.address) },
-    { label: "City/State/Pincode", filled: Boolean(localProfile?.city && localProfile?.state && localProfile?.pincode) },
-    { label: "Phone or WhatsApp (Brand Brain)", filled: Boolean(brand?.phone || brand?.whatsapp) },
-    { label: "Google Business Profile link", filled: Boolean(localProfile?.gbp_url) },
-  ];
+  const napFields = getNapFields({ local: localProfile, brand });
   const napComplete = napFields.every((f) => f.filled);
   const citationsCompleted = localProfile?.citations_completed ?? [];
 
