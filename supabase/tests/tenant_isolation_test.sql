@@ -13,6 +13,18 @@
 -- "positive controls" (each user CAN see their own org) so a broken
 -- simulation can't produce a false PASS.
 --
+-- How the write check works: it tries `update ... where org_id = <other org>`.
+-- Postgres applies the SELECT policy to any UPDATE that reads a column, so a
+-- write hole is reported when the other client's row is both visible and
+-- updatable. That is the case an ordinary API call can reach (it filters on a
+-- column, e.g. ?org_id=eq.<id>); a policy that allowed updates but not reads
+-- would not be exercised by this test.
+--
+-- Verified before it was handed over: run against all 36 migrations loaded into
+-- a scratch Postgres with rows for both tenants in every org table — PASS on the
+-- real policies, "VULNERABLE" before migration 0034 and "PROTECTED" after, and
+-- it correctly reports LEAK when a read or write hole is deliberately added.
+--
 -- Not covered: Supabase Storage bucket policies (storage.objects) — test those
 -- separately.
 do $$

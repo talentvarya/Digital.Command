@@ -136,6 +136,8 @@ Same shape as the earlier phases: org members get access to their own org's rows
 
 `supabase/tests/tenant_isolation_test.sql` impersonates two real clients (the `authenticated` role plus their user id) and checks that neither can read or write the other's rows in every public table with an `org_id` column, with positive controls so a broken simulation can't produce a false PASS. It also reports whether the admin-column hole is open (before `0034`) or closed (after). It ends in a deliberate `raise exception` so nothing it does is ever committed — read the exception text as the report. Run it separately from the migrations. It does not cover Storage bucket policies.
 
+The same SQL also runs automatically on every push (`tests/rls-isolation.test.ts`): all migrations are loaded into an in-memory Postgres with rows for two tenants in every org-scoped table, so a migration that fails to apply or opens a cross-tenant hole fails CI. That checks the migration files, **not the live project** — if the live database was ever changed by hand, only running the SQL file there can see it. The test's own detection was checked by deliberately adding a read hole and a write hole and confirming both are reported.
+
 ## Storage
 
 All four buckets (`verification-documents`, `payment-screenshots`, `brand-assets`, `content-media`) are private. Policies check `is_org_member((storage.foldername(name))[1]::uuid)` or `is_super_admin()` against the `{org_id}/...` path prefix, mirroring the owning table's access rules. Signed URLs (short-lived, generated server-side) are used to display documents/media — nothing is ever public.
