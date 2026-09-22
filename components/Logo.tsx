@@ -3,8 +3,8 @@ import { Radar } from "lucide-react";
 export function Logo({ subtitle = true }: { subtitle?: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
-      <span className="flex h-9 w-9 shrink-0 animate-spin-slow items-center justify-center rounded-lg bg-brand-600 text-white motion-reduce:animate-none">
-        <Radar className="h-5 w-5" />
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
+        <Radar className="h-5 w-5 animate-spin-slow motion-reduce:animate-none" />
       </span>
       <div className="leading-tight">
         <div className="text-lg font-bold tracking-tight text-ink-900">
