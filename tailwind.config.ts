@@ -42,6 +42,11 @@ const config: Config = {
         display: ["var(--font-display)", "var(--font-sans)", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
+      animation: {
+        // The logo's icon badge — a slow, continuous spin (not the fast 1s
+        // "loading" spin), since it sits in the header on every page.
+        "spin-slow": "spin 6s linear infinite",
+      },
     },
   },
   plugins: [],
