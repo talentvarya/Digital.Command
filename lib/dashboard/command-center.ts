@@ -306,7 +306,7 @@ export function describeActivity(actionType: string, source: string): string | n
 // Month and weekday names are spelled out here rather than taken from the
 // runtime's locale data, which abbreviates September as "Sept" in some versions.
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // A post's slot as words: "Sat 27 Sep · 9:00 AM". The stored date and time are
 // already India time, so nothing is converted — only formatted.

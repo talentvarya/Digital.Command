@@ -1,4 +1,4 @@
-import { Search, Target, Users, Gauge } from "lucide-react";
+import { Search, Target, Users, Gauge, Download } from "lucide-react";
 import { MetricStatCard, CHART_COLORS } from "@/components/charts/StatCard";
 import type { Report } from "@/types/database";
 import type { ReportMetricsInput } from "@/lib/ai/generate-report";
@@ -8,11 +8,17 @@ export function ReportCard({ report }: { report: Report }) {
 
   return (
     <div className="card space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-ink-900">
-          {report.period_start} — {report.period_end}
-        </h3>
-        <span className="text-xs text-ink-400">{new Date(report.generated_at).toLocaleString()}</span>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-ink-900">
+            {report.period_start} — {report.period_end}
+          </h3>
+          <span className="text-xs text-ink-400">{new Date(report.generated_at).toLocaleString()}</span>
+        </div>
+        {/* A plain link: the file comes straight from the server, no page navigation. */}
+        <a href={`/app/reports/${report.id}/pdf`} download className="btn-secondary px-3 py-2">
+          <Download className="mr-1.5 h-4 w-4" /> Download PDF
+        </a>
       </div>
 
       <div>

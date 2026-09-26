@@ -9,9 +9,12 @@ const nextConfig = {
     serverComponentsExternalPackages: ["satori", "harfbuzzjs", "sharp"],
     // harfbuzzjs finds hb.wasm by a runtime path, which Next's file tracing can't
     // see, so it would be missing from the deployed function. Ship it explicitly
-    // with the route whose server actions draw the graphics.
+    // with each route that draws with satori: the planner's graphics (server
+    // actions) and the report PDF download (brackets are escaped because the
+    // key is a glob).
     outputFileTracingIncludes: {
       "/app/planner": ["./node_modules/harfbuzzjs/hb.wasm"],
+      "/app/reports/\\[id\\]/pdf": ["./node_modules/harfbuzzjs/hb.wasm"],
     },
   },
 };

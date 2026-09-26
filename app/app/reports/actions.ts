@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireOrgMember } from "@/lib/auth/require-org-member";
 import { logAudit } from "@/lib/audit/log";
-import { generateReportNarrative, type ReportMetricsInput } from "@/lib/ai/generate-report";
+import { countIssues, generateReportNarrative, type ReportMetricsInput } from "@/lib/ai/generate-report";
 import { AiGenerationError } from "@/lib/ai/client";
 import { logAiUsage } from "@/lib/ai/log-usage";
 import type { ActionResult } from "@/app/register/actions";
@@ -23,7 +23,7 @@ export async function generateReportAction(_prevState: ActionResult, formData: F
   const periodEndStr = periodEnd.toISOString().slice(0, 10);
 
   const [{ data: audits }, { data: scSnapshots }, { data: gaSnapshots }, { data: content }] = await Promise.all([
-    supabase.from("seo_audits").select("score, crawled_at").eq("org_id", orgId).order("crawled_at", { ascending: false }).limit(2),
+    supabase.from("seo_audits").select("score, issues, crawled_at").eq("org_id", orgId).order("crawled_at", { ascending: false }).limit(2),
     supabase
       .from("search_console_snapshots")
       .select("total_clicks, total_impressions, avg_position, avg_ctr, synced_at")
@@ -48,7 +48,7 @@ export async function generateReportAction(_prevState: ActionResult, formData: F
     periodStart: periodStartStr,
     periodEnd: periodEndStr,
     seoAudit: audits?.[0]
-      ? { score: audits[0].score, issueCount: 0, previousScore: audits[1]?.score ?? null }
+      ? { score: audits[0].score, issueCount: countIssues(audits[0].issues), previousScore: audits[1]?.score ?? null }
       : null,
     searchConsole: scSnapshots?.[0]
       ? {

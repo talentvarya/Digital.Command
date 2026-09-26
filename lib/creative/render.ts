@@ -23,24 +23,24 @@ export interface CreativeSpec {
 }
 
 type CssValue = string | number;
-type Css = Record<string, CssValue>;
-interface El {
+export type Css = Record<string, CssValue>;
+export interface El {
   type: string;
   props: Record<string, unknown>;
 }
-type Child = El | string | null | undefined | false;
+export type Child = El | string | null | undefined | false;
 
 // satori insists every <div> with more than one child says display: flex, so
-// every div here does.
-function box(style: Css, ...children: Child[]): El {
+// every div here does. (Exported: the downloadable report is drawn the same way.)
+export function box(style: Css, ...children: Child[]): El {
   return { type: "div", props: { style: { display: "flex", ...style }, children: children.filter(Boolean) } };
 }
 
-function label(style: Css, value: string): El {
+export function label(style: Css, value: string): El {
   return { type: "div", props: { style: { display: "flex", ...style }, children: value } };
 }
 
-function image(src: string, style: Css): El {
+export function image(src: string, style: Css): El {
   return { type: "img", props: { src, style } };
 }
 
@@ -284,7 +284,7 @@ export function buildElement(spec: CreativeSpec): El {
 
 let fontCache: { name: string; data: Buffer; weight: 400 | 700; style: "normal" }[] | null = null;
 
-function fonts() {
+export function fonts() {
   if (!fontCache) {
     fontCache = [
       { name: "Poppins", data: Buffer.from(POPPINS_REGULAR_B64, "base64"), weight: 400, style: "normal" },

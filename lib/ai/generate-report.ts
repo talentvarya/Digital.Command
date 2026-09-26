@@ -22,6 +22,11 @@ export interface ReportMetricsInput {
   content: { scheduledCount: number; publishedCount: number; totalCount: number };
 }
 
+// How many issues an SEO audit found; its `issues` column is a JSON list.
+export function countIssues(issues: unknown): number {
+  return Array.isArray(issues) ? issues.length : 0;
+}
+
 export interface GeneratedReportNarrative {
   summary: string;
   nextPlan: string;
