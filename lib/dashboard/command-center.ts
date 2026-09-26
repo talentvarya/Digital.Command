@@ -288,6 +288,10 @@ const FRIENDLY: Record<string, string> = {
   payment_reviewed: "Your payment was reviewed",
   client_activated: "Your account was activated",
   account_created: "Your account was created",
+  contact_added: "Added a customer",
+  contacts_imported: "Imported customers",
+  contact_updated: "Updated a customer",
+  contact_deleted: "Removed a customer",
   org_offboarded: "The account was closed",
   application_rejected: "The application was rejected",
 };

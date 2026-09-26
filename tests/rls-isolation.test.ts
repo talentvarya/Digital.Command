@@ -79,6 +79,64 @@ describe("database migrations and tenant isolation", () => {
   }, 60_000);
 });
 
+// Customers' phone numbers are the most personal data in the product, so they get
+// a check of their own on top of the generic one: another business can't read,
+// add to, change or delete them — and neither can a Super Admin (deliberately).
+describe("customer contacts privacy", () => {
+  it("keeps a business's customers to that business alone", async () => {
+    const d = await newDb();
+    await applyMigrations(d);
+    await seedTwoTenants(d);
+
+    const orgs = (
+      await d.query<{ id: string; created_by: string }>(`select id, created_by from public.organizations order by legal_name`)
+    ).rows;
+    const [a, b] = orgs; // Aura Lux (test), then Vineet Events (test)
+    const admin = (await d.query<{ id: string }>(`insert into auth.users (email) values ('admin@example.test') returning id`)).rows[0].id;
+    await d.query(`update public.profiles set role = 'super_admin' where id = $1`, [admin]);
+
+    // Run as a signed-in user, then roll back so nothing stays changed.
+    async function asUser<T>(userId: string, run: () => Promise<T>): Promise<T> {
+      await d.exec(`begin; set local role authenticated; select set_config('request.jwt.claim.sub', '${userId}', true);`);
+      try {
+        return await run();
+      } finally {
+        await d.exec(`rollback;`);
+      }
+    }
+
+    // Each business has one seeded customer.
+    await asUser(a.created_by, async () => {
+      const seen = (await d.query<{ org_id: string }>(`select org_id from public.customer_contacts`)).rows;
+      expect(seen.map((r) => r.org_id)).toEqual([a.id]);
+
+      // adds to its own list...
+      await d.query(`insert into public.customer_contacts (org_id, name, phone) values ($1, 'New customer', '919000000001')`, [a.id]);
+      // ...but not into another business's
+      await expect(
+        d.query(`insert into public.customer_contacts (org_id, name, phone) values ($1, 'Planted', '919000000002')`, [b.id])
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    await asUser(a.created_by, async () => {
+      const changed = await d.query(`update public.customer_contacts set name = 'hacked' where org_id = $1 returning id`, [b.id]);
+      expect(changed.rows).toHaveLength(0);
+      const removed = await d.query(`delete from public.customer_contacts where org_id = $1 returning id`, [b.id]);
+      expect(removed.rows).toHaveLength(0);
+    });
+
+    // A Super Admin can read most tables, but not a business's customers.
+    await asUser(admin, async () => {
+      const seen = await d.query(`select id from public.customer_contacts`);
+      expect(seen.rows).toHaveLength(0);
+    });
+
+    // Nothing above changed the data.
+    const total = (await d.query<{ n: number }>(`select count(*)::int as n from public.customer_contacts`)).rows[0].n;
+    expect(total).toBe(2);
+  }, 120_000);
+});
+
 // The owner pastes the migrations and the test into one query. That must both
 // work and never let the test undo the migrations.
 describe("pasting the migrations and the isolation test together", () => {

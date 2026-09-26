@@ -121,3 +121,15 @@ Spec §25's `backlink_opportunities` and `outreach_jobs` are **partially** repre
 Spec §25's `ad_campaigns`/`campaign_approvals` are now **fully** represented as `paid_campaigns`/`paid_campaign_approvals` (Phase 6) — the one gap from this table's original NOT-yet-created list that Phase 6 closes.
 
 Phase 7 deliberately does **not** create `api_health_events` — the Connection Health Center (spec §27) turned out to need zero new schema at all, since it's pure aggregation over status columns (`org_links.status`, `google_connections.status`, `buffer_channel_links` presence) that already existed; a dedicated events/incident table is still worth adding once there's real connection volume and, ideally, a cron platform to poll it proactively (still gated on the open hosting decision, spec §37.3). `automation_jobs`, `support_tickets`, `generated_assets` remain not yet created — none of Phase 7's 8 sub-features needed them.
+
+## Added after Phase 12 (`0033`–`0039`)
+
+| Migration | What it adds |
+|---|---|
+| `0033` | `content_items.insights` / `insights_synced_at` — Buffer engagement numbers for published posts |
+| `0034` | a trigger protecting admin-only `client_settings` columns (no new table) |
+| `0035` | `cron_runs` — one row per scheduled-job run (Super Admin read only; written by the server) |
+| `0036` | `ai_visibility_checks` — append-only results of "what Google's AI says about you" |
+| `0037` | `creative_generations` — usage log for post graphics; what keeps the free AI-photo allowance fair (written only by the server) |
+| `0038` | `content_items.image_prompt` — the client's description of the picture they want for a post |
+| `0039` | `customer_contacts` — a business's own customers (`name`, `phone` as digits with country code, `tags`, `consent`, `opted_out`, `last_messaged_at`); readable and writable only by that business's members, not even by a Super Admin |

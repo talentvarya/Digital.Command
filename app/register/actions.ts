@@ -13,6 +13,8 @@ import type { BusinessType } from "@/types/database";
 
 export interface ActionResult {
   error?: string;
+  // A plain confirmation to show after a successful action (e.g. "Added 12 customers").
+  message?: string;
 }
 
 export async function signUpAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {

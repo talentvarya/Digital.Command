@@ -18,6 +18,7 @@ import {
   CalendarClock,
   Activity,
   MousePointer2,
+  MessageCircle,
   Eye,
   Users,
 } from "lucide-react";
@@ -347,6 +348,7 @@ export default async function ClientDashboardPage() {
         <h2 className="mb-3 text-lg font-semibold text-ink-900">All tools</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <ModuleLinkCard icon={Palette} title="Brand Brain" subtitle="Voice, visuals & guardrails for AI content" href="/app/brand" color={MODULE_COLORS.blue} />
+          <ModuleLinkCard icon={MessageCircle} title="Customers & WhatsApp" subtitle="Your customer list, and one-tap WhatsApp messages you send yourself — festival wishes, offers, thank-yous" href="/app/contacts" color={MODULE_COLORS.orange} />
           <ModuleLinkCard icon={ClipboardList} title="Content Planner" subtitle="Generate, review, approve — publishes automatically via Buffer/YouTube once scheduled" href="/app/planner" color={MODULE_COLORS.red} />
           <ModuleLinkCard icon={Link2} title="Website & Channel Connections" subtitle="Add links, check they're reachable" href="/app/links" color={MODULE_COLORS.orange} />
           <ModuleLinkCard icon={Search} title="SEO" subtitle="Technical audit, Search Console & Analytics & YouTube connections, keyword tracking" href="/app/seo" color={MODULE_COLORS.yellow} />
