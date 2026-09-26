@@ -83,7 +83,7 @@ to post? Do people who message me get a reply? Do my reviews look good?" — and
 
 ## What only the owner can do (short list)
 
-1. Run `5-RUN-ALL-LATEST-updates.sql` (in `D:CLAUDE LOCAL SERVERSQL-TO-RUN`): it adds the AI-photo usage log (0037), the picture-description column (0038) and the customer list (0039) in one go, and is safe to run twice. Paste the **contents** into the Supabase SQL Editor, not the file name; its result table must read `true, true, true, 4, false`.
+1. Run `5-RUN-ALL-LATEST-updates.sql` (in the `SQL-TO-RUN` folder next to the project): it adds the AI-photo usage log (0037), the picture-description column (0038) and the customer list (0039) in one go, and is safe to run twice. Paste the **contents** into the Supabase SQL Editor, not the file name; its result table must read `true, true, true, 4, false`.
 2. Create a free Cloudflare account and add `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AI_API_TOKEN` in Vercel (as plain "Config" values, Production), then redeploy. The first AI photo is the live test.
 3. Confirm the environment values on the Health page (`/admin/health`).
 4. Decide, when ready: link Aura Lux's Buffer channel and approve the first real post; approve one paid Apify run for 3.1; create Brevo and Razorpay accounts (2.2, 2.4); provide the GST details (2.4).
