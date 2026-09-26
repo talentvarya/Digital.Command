@@ -30,6 +30,8 @@ import type { BrandProfile, ContentControlMode, ContentItem, ContentPlatform } f
 
 function refresh() {
   revalidatePath("/app/planner");
+  // The client home lists posts waiting for approval, with Approve buttons of its own.
+  revalidatePath("/app/dashboard");
 }
 
 function parseHashtags(value: FormDataEntryValue | null): string[] {
@@ -529,6 +531,8 @@ export async function decideContentAction(_prevState: ActionResult, formData: Fo
   if (before?.locked) return { error: "This item is locked." };
 
   const nextStatus = decision === "approve" ? "scheduled" : decision === "reject" ? "rejected" : "skipped";
+  // Past tense written out: appending "d" to the verb gave "content_rejectd" / "content_skipd".
+  const auditType = decision === "approve" ? "content_approved" : decision === "reject" ? "content_rejected" : "content_skipped";
 
   const { data: updatedItem, error } = await supabase
     .from("content_items")
@@ -547,7 +551,7 @@ export async function decideContentAction(_prevState: ActionResult, formData: Fo
     actorUserId: member.userId,
     actorRole: "client_owner",
     source: "CLIENT_MANUAL",
-    actionType: `content_${decision}d`,
+    actionType: auditType,
     target: id,
     previousState: before ?? null,
     newState: { status: nextStatus },
