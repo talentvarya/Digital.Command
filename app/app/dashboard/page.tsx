@@ -51,6 +51,7 @@ import {
   timeAgo,
   type UpcomingItem,
 } from "@/lib/dashboard/command-center";
+import { nextOccasionNudge } from "@/lib/occasions/plan";
 import type { ContentPlatform } from "@/types/database";
 
 // Warm rotation for the tools grid, separate from CHART_COLORS' full
@@ -160,6 +161,7 @@ export default async function ClientDashboardPage() {
       reviews: reviews ?? [],
       brand,
       daysUntilExpiry: remaining,
+      occasionNudge: nextOccasionNudge(items, today),
     })
   );
 

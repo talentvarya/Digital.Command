@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/ai/provider", () => ({ generateText: vi.fn() }));
 
 import { generateText } from "@/lib/ai/provider";
-import { generateCaption, parseResponse } from "@/lib/ai/generate-content";
+import { buildUserPrompt, generateCaption, parseResponse } from "@/lib/ai/generate-content";
 
 describe("parseResponse — the caption plus the picture idea", () => {
   it("reads the caption, hashtags and image idea", () => {
@@ -54,5 +54,41 @@ describe("generateCaption", () => {
     expect(system).toMatch(/no text, logos or brand names/);
     expect(system).toMatch(/no real people or celebrities/);
     expect(result).toMatchObject({ caption: "C", hashtags: ["h"], imageIdea: "A picture idea" });
+  });
+
+  it("tells the model which occasion a post is for, without inviting invented offers", async () => {
+    await generateCaption({
+      platform: "facebook",
+      brandProfile: null,
+      occasion: { name: "Diwali", date: "2026-11-08", angle: "The festival of lights." },
+    });
+    const { user } = vi.mocked(generateText).mock.calls[0][0];
+    expect(user).toContain("This post is for Diwali (2026-11-08). Background: The festival of lights.");
+    expect(user).toMatch(/warm, respectful greeting/);
+    expect(user).toMatch(/Do not invent offers, prices, discounts, dates or deadlines/);
+  });
+});
+
+describe("buildUserPrompt", () => {
+  it("has nothing about an occasion unless one was chosen", () => {
+    expect(buildUserPrompt({ platform: "instagram", brandProfile: null })).toBe("Write a caption for a instagram post.");
+    expect(buildUserPrompt({ platform: "instagram", brandProfile: null, occasion: null })).not.toMatch(/This post is for/);
+  });
+
+  it("works when the occasion has no background line", () => {
+    const prompt = buildUserPrompt({ platform: "facebook", brandProfile: null, occasion: { name: "Holi", date: "2027-03-22" } });
+    expect(prompt).toContain("This post is for Holi (2027-03-22).");
+    expect(prompt).not.toContain("Background:");
+  });
+
+  it("keeps the client's own direction alongside the occasion", () => {
+    const prompt = buildUserPrompt({
+      platform: "facebook",
+      brandProfile: null,
+      occasion: { name: "Holi", date: "2027-03-22" },
+      clientSuggestion: "Mention our gujiya boxes",
+    });
+    expect(prompt).toContain("This post is for Holi");
+    expect(prompt).toContain('follow it closely: "Mention our gujiya boxes"');
   });
 });

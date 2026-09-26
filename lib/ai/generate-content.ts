@@ -9,6 +9,8 @@ export interface GenerateCaptionParams {
   brandProfile: BrandProfile | null;
   previousCaptions?: string[];
   clientSuggestion?: string | null;
+  // A festival or occasion the client chose to plan a post for (never added on its own).
+  occasion?: { name: string; date: string; angle?: string | null } | null;
 }
 
 export interface GeneratedCaption {
@@ -51,8 +53,16 @@ function buildSystemPrompt(brandProfile: BrandProfile | null): string {
   return lines.join("\n");
 }
 
-function buildUserPrompt(params: GenerateCaptionParams): string {
+export function buildUserPrompt(params: GenerateCaptionParams): string {
   const lines = [`Write a caption for a ${params.platform} post.`];
+
+  if (params.occasion) {
+    const { name, date, angle } = params.occasion;
+    lines.push(
+      `This post is for ${name} (${date}).${angle ? ` Background: ${angle}` : ""}`,
+      "Write a warm, respectful greeting or theme for it that fits this business. Do not invent offers, prices, discounts, dates or deadlines that were not given above."
+    );
+  }
 
   if (params.previousCaptions?.length) {
     lines.push(

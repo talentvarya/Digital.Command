@@ -22,6 +22,8 @@ import { resolveDueAt } from "@/lib/publishing/schedule";
 import { computeBufferState, slotKey } from "@/lib/planner/buffer";
 import { cleanFreeText, tryWithOptionalColumn } from "@/lib/planner/optional-column";
 import { istDateString, nextDays } from "@/lib/utils/ist";
+import { findOccasion } from "@/lib/occasions/calendar";
+import { pickSlot } from "@/lib/occasions/plan";
 import { attachUnsplashPhoto, captionToImageQuery } from "@/lib/unsplash/attach";
 import { getBufferPostStatus, getBufferPostMetrics, BufferApiError } from "@/lib/buffer/client";
 import { getValidAccessToken } from "@/lib/google/oauth";
@@ -77,6 +79,8 @@ export async function generateOneSlot(
     // (default) vs the unattended daily Autopilot cron. Audit trail only;
     // doesn't change behavior.
     auditSource?: "CLIENT_MANUAL" | "AUTOPILOT";
+    // A festival/occasion the client chose to plan this post for.
+    occasion?: { name: string; date: string; angle?: string | null } | null;
   }
 ): Promise<{ error: string } | { itemId: string }> {
   const { orgId, userId, platform, scheduledDate, controlMode, brand } = params;
@@ -91,6 +95,7 @@ export async function generateOneSlot(
       brandProfile: brand,
       previousCaptions: params.previousCaptions ?? [],
       clientSuggestion,
+      occasion: params.occasion ?? null,
     });
   } catch (err) {
     if (err instanceof AiGenerationError) return { error: err.message };
@@ -215,6 +220,27 @@ export async function generateOneSlot(
   return { itemId };
 }
 
+// Why AI writing can't run for this business right now (a Master STOP, an
+// Emergency Freeze, or the monthly safety cap), or null when it can.
+async function generationBlockedReason(supabase: SupabaseClient, orgId: string): Promise<string | null> {
+  const automation = await checkAutomationAllowed(supabase, orgId);
+  if (!automation.allowed) return automation.reason;
+
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+  const { count: generationsThisMonth } = await supabase
+    .from("content_versions")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", orgId)
+    .in("generated_by", ["ai", "client_suggestion", "gpt_assistant"])
+    .gte("created_at", startOfMonth.toISOString());
+  if ((generationsThisMonth ?? 0) >= MONTHLY_AI_GENERATION_SAFETY_CAP) {
+    return `Monthly AI generation limit reached (${MONTHLY_AI_GENERATION_SAFETY_CAP}). Contact support to raise it, or add your own content directly.`;
+  }
+  return null;
+}
+
 // ============================================================================
 // AI generation — first attempt or "Generate Another" / suggestion-based retry
 // ============================================================================
@@ -227,23 +253,8 @@ export async function generateAiContentAction(
   if ("error" in member) return member;
   const { userId, orgId } = member;
 
-  const automation = await checkAutomationAllowed(supabase, orgId);
-  if (!automation.allowed) return { error: automation.reason };
-
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
-  const { count: generationsThisMonth } = await supabase
-    .from("content_versions")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", orgId)
-    .in("generated_by", ["ai", "client_suggestion", "gpt_assistant"])
-    .gte("created_at", startOfMonth.toISOString());
-  if ((generationsThisMonth ?? 0) >= MONTHLY_AI_GENERATION_SAFETY_CAP) {
-    return {
-      error: `Monthly AI generation limit reached (${MONTHLY_AI_GENERATION_SAFETY_CAP}). Contact support to raise it, or add your own content directly.`,
-    };
-  }
+  const blocked = await generationBlockedReason(supabase, orgId);
+  if (blocked) return { error: blocked };
 
   const contentItemId = (formData.get("contentItemId") as string) || null;
   const clientSuggestion = ((formData.get("clientSuggestion") as string) || "").trim() || null;
@@ -304,6 +315,66 @@ export async function generateAiContentAction(
 
   refresh();
   return {};
+}
+
+// ============================================================================
+// "Plan a post" for a festival or occasion — the client presses the button, so
+// nothing is ever planned for a festival on the business's behalf. The post goes
+// through the same approval flow as any other: waiting for approval, or scheduled
+// if the business is on Autopilot.
+// ============================================================================
+export async function planOccasionPostAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
+  const supabase = createClient();
+  const member = await requireOrgMember(supabase);
+  if ("error" in member) return member;
+  const { userId, orgId } = member;
+
+  const occasion = findOccasion(String(formData.get("occasionKey") ?? ""));
+  if (!occasion) return { error: "That occasion wasn't found." };
+  const platform = String(formData.get("platform") ?? "") as ContentPlatform;
+  if (platform !== "facebook" && platform !== "instagram") return { error: "Choose Facebook or Instagram." };
+  if (occasion.date < istDateString()) return { error: `${occasion.name} has already passed.` };
+
+  const blocked = await generationBlockedReason(supabase, orgId);
+  if (blocked) return { error: blocked };
+
+  const slot = pickSlot(occasion.date, TIME_SLOTS.map((s) => s.value), (date, time) => !resolveDueAt({ scheduled_date: date, scheduled_time: time }).ok);
+  if (!slot) return { error: `Today's posting times have already passed, so ${occasion.name} can't be planned for today. Add a post by hand, or plan the next occasion.` };
+
+  // One post per platform per occasion: never quietly add a second on top of the first.
+  const { data: already } = await supabase
+    .from("content_items")
+    .select("id")
+    .eq("org_id", orgId)
+    .eq("platform", platform)
+    .eq("scheduled_date", occasion.date)
+    .not("status", "in", "(rejected,skipped)")
+    .limit(1);
+  // "a Facebook post" but "an Instagram post"
+  const aPost = `${platform === "instagram" ? "an" : "a"} ${PLATFORM_LABELS[platform]} post`;
+  if (already && already.length > 0) {
+    return { error: `You already have ${aPost} planned for ${occasion.name} — open it in the planner below.` };
+  }
+
+  const { brand, controlMode } = await getBrandAndSettings(supabase, orgId);
+  const result = await generateOneSlot(supabase, {
+    orgId,
+    userId,
+    platform,
+    scheduledDate: occasion.date,
+    scheduledTime: slot,
+    controlMode,
+    brand,
+    occasion: { name: occasion.name, date: occasion.date, angle: occasion.angle },
+  });
+  if ("error" in result) return result;
+
+  refresh();
+  return {
+    message: `${aPost.charAt(0).toUpperCase()}${aPost.slice(1)} for ${occasion.name} is ready — ${
+      controlMode === "autopilot" ? "it's scheduled." : "it's waiting for your approval in the planner below."
+    }`,
+  };
 }
 
 // ============================================================================

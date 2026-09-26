@@ -56,7 +56,8 @@ After the migrations, run `supabase/tests/tenant_isolation_test.sql` (as its own
 7. Client home (Command Center): it opens on "Needs your attention" / "Ready for your approval" and six result tiles. On a client with no Google connection the Google tiles must say what to connect (not show zeros). Approve one post from the home page and confirm it disappears from the list and shows as Scheduled in the planner.
 8. Reports: generate a report, press **Download PDF**, and open it — two pages, the business name and period on top, figures that match the report card, and "Not connected yet" (not 0) for any Google source that isn't connected. Hindi text in the summary should show properly.
 9. Customers & WhatsApp (`/app/contacts`, after `0039`): add a test customer with your own number and tick "agreed"; pick a message, replace `{details}`, and tap **Open WhatsApp** — WhatsApp should open on that number with the message ready (nothing is sent until you press send). A customer marked "asked to stop" must not appear in the list.
-10. If `TOKEN_ENCRYPTION_KEY` is set: connect Google (or an Apify token) on a test client and confirm the connection works, then confirm the stored value in `google_connections` / `apify_connections` starts with `enc:v1:`.
+10. Planner → **Coming up**: the next big festival should be listed with its date. Press **Plan an Instagram post** on a test client: a draft for that day should appear waiting for approval, with a greeting for that occasion (no invented offer). Pressing it again for the same festival and platform should say a post already exists.
+11. If `TOKEN_ENCRYPTION_KEY` is set: connect Google (or an Apify token) on a test client and confirm the connection works, then confirm the stored value in `google_connections` / `apify_connections` starts with `enc:v1:`.
 
 ## 5. Things that need a person, not code
 

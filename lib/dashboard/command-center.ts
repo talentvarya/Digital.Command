@@ -52,6 +52,8 @@ export interface AttentionInput {
   brandIncomplete: boolean;
   // See daysUntil(): 0 = ends today, negative = already ended.
   daysUntilExpiry: number | null;
+  // A big festival or occasion coming up with no post planned for it yet.
+  occasionNudge: { name: string; days: number } | null;
 }
 
 export type AttentionTone = "urgent" | "todo" | "info";
@@ -93,6 +95,7 @@ export function deriveAttentionInput(args: {
   reviews: { reply_status: string }[];
   brand: { logo_path?: string | null; colors?: unknown } | null;
   daysUntilExpiry: number | null;
+  occasionNudge?: { name: string; days: number } | null;
 }): AttentionInput {
   const { items } = args;
   const mediaByItem = new Map(items.map((i) => [i.id, i.content_media ?? []]));
@@ -112,6 +115,7 @@ export function deriveAttentionInput(args: {
     ),
     brandIncomplete,
     daysUntilExpiry: args.daysUntilExpiry,
+    occasionNudge: args.occasionNudge ?? null,
   };
 }
 
@@ -184,6 +188,17 @@ export function buildAttentionItems(input: AttentionInput): AttentionItem[] {
       detail: "Prompt replies show customers you're listening.",
       href: "/app/reputation",
       cta: "Reply",
+    });
+  }
+  if (input.occasionNudge) {
+    const { name, days } = input.occasionNudge;
+    items.push({
+      key: "occasion",
+      tone: days <= 7 ? "todo" : "info",
+      title: `${name} is ${days === 1 ? "tomorrow" : `in ${days} days`} — no post planned yet`,
+      detail: "Customers expect to hear from you on the big days. Plan a post and it'll be ready for your approval.",
+      href: "/app/planner",
+      cta: "Plan a post",
     });
   }
   if (input.daysUntilExpiry !== null && input.daysUntilExpiry <= 14) {

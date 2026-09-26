@@ -29,6 +29,7 @@ const quiet: AttentionInput = {
   noPublishingChannel: false,
   brandIncomplete: false,
   daysUntilExpiry: null,
+  occasionNudge: null,
 };
 
 describe("greetingFor", () => {
@@ -153,6 +154,33 @@ describe("buildAttentionItems", () => {
     expect(buildAttentionItems({ ...quiet, daysUntilExpiry: -3 })[0].title).toBe("Your package has expired");
   });
 
+  it("nudges about a coming festival with no post planned, urgently only when it's close", () => {
+    const near = buildAttentionItems({ ...quiet, occasionNudge: { name: "Diwali", days: 5 } })[0];
+    expect([near.key, near.tone, near.title, near.href, near.cta]).toEqual([
+      "occasion",
+      "todo",
+      "Diwali is in 5 days — no post planned yet",
+      "/app/planner",
+      "Plan a post",
+    ]);
+    expect(buildAttentionItems({ ...quiet, occasionNudge: { name: "Holi", days: 12 } })[0].tone).toBe("info");
+    expect(buildAttentionItems({ ...quiet, occasionNudge: { name: "Holi", days: 1 } })[0].title).toBe("Holi is tomorrow — no post planned yet");
+    expect(buildAttentionItems({ ...quiet, occasionNudge: null })).toEqual([]);
+  });
+
+  it("passes the festival nudge through from what the page found", () => {
+    const withNudge = deriveAttentionInput({
+      items: [],
+      linkedPlatforms: [],
+      googleStatuses: [],
+      reviews: [],
+      brand: { logo_path: "x", colors: ["#000000"] },
+      daysUntilExpiry: null,
+      occasionNudge: { name: "Diwali", days: 4 },
+    });
+    expect(withNudge.occasionNudge).toEqual({ name: "Diwali", days: 4 });
+  });
+
   it("flags a missing publishing channel as urgent", () => {
     const item = buildAttentionItems({ ...quiet, noPublishingChannel: true })[0];
     expect(item.tone).toBe("urgent");
@@ -192,6 +220,7 @@ describe("deriveAttentionInput", () => {
       noPublishingChannel: false,
       brandIncomplete: false,
       daysUntilExpiry: null,
+      occasionNudge: null,
     });
   });
 

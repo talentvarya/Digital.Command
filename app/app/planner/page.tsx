@@ -11,7 +11,11 @@ import { cloudflareImageConfigured } from "@/lib/creative/cloudflare";
 import { pickBatchItems } from "@/lib/creative/eligibility";
 import { firstProductPhrase } from "@/lib/creative/spec";
 import { PLANNER_WINDOW_OPTIONS, type PlannerWindow } from "@/lib/constants/content";
-import { nextDays } from "@/lib/utils/ist";
+import { addDays, nextDays } from "@/lib/utils/ist";
+import { daysAwayLabel } from "@/lib/occasions/calendar";
+import { upcomingOccasions } from "@/lib/occasions/plan";
+import { formatSlot } from "@/lib/dashboard/command-center";
+import { OccasionsCard, type OccasionCardItem } from "@/components/planner/OccasionsCard";
 import type { ContentMedia, ContentVersion } from "@/types/database";
 
 // Making a post graphic (especially an AI photo) can take a while; the default
@@ -42,7 +46,10 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
   // Counted from today in India, even in the small hours when the server's own date is still yesterday's.
   const days = nextDays(windowDays);
 
-  const [{ data: settings }, { data: brand }, { data: items }] = await Promise.all([
+  const today = days[0];
+  const occasionWindowEnd = addDays(today, 45);
+
+  const [{ data: settings }, { data: brand }, { data: items }, { data: occasionPosts }] = await Promise.all([
     supabase
       .from("client_settings")
       .select("content_control_mode, approval_then_autopilot, autopilot_platforms")
@@ -56,7 +63,26 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
       .gte("scheduled_date", days[0])
       .lte("scheduled_date", days[days.length - 1])
       .order("created_at", { ascending: true }),
+    // Which of the coming festivals already have a Facebook/Instagram post planned.
+    supabase
+      .from("content_items")
+      .select("scheduled_date, platform, status")
+      .eq("org_id", membership.org_id)
+      .gte("scheduled_date", today)
+      .lte("scheduled_date", occasionWindowEnd)
+      .in("platform", ["facebook", "instagram"]),
   ]);
+
+  const occasionCards: OccasionCardItem[] = upcomingOccasions(occasionPosts ?? [], today).map(({ occasion, days: away, planned }) => ({
+    key: occasion.key,
+    name: occasion.name,
+    hindi: occasion.hindi ?? null,
+    dateLabel: formatSlot(occasion.date, null),
+    daysLabel: daysAwayLabel(away),
+    angle: occasion.angle,
+    approximate: Boolean(occasion.approximate),
+    planned,
+  }));
 
   const itemIds = (items ?? []).map((i) => i.id);
   const [{ data: media }, { data: versions }] = itemIds.length
@@ -129,6 +155,8 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
         approvalThenAutopilot={settings?.approval_then_autopilot ?? false}
         autopilotPlatforms={settings?.autopilot_platforms ?? []}
       />
+
+      <OccasionsCard occasions={occasionCards} />
 
       <CreateAllImagesButton itemIds={batchItemIds} aiAvailable={aiPhotosAvailable} />
 
