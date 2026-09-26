@@ -137,6 +137,16 @@ export function pickFontSize(text: string, boxWidth: number, maxLines: number, m
   return min;
 }
 
+// The first product or service named in Brand Brain ("Chocolates, gift boxes"),
+// used to make the picture-idea suggestions sound like this business.
+export function firstProductPhrase(text: string | null | undefined): string {
+  const first = (text ?? "")
+    .split(/[,;\n•|]/)
+    .map((part) => part.replace(/^[\s\-–—*\d.)]+/, "").trim())
+    .find(Boolean);
+  return first ? truncateAtWord(first, 40) : "";
+}
+
 // ---------------------------------------------------------------------------
 // Colours
 // ---------------------------------------------------------------------------

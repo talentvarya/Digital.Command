@@ -232,6 +232,10 @@ export interface ContentItem {
   scheduled_time: string | null;
   caption: string | null;
   hashtags: string[];
+  // A short description of the picture this post should have (AI-suggested,
+  // client-editable). Absent/null until set — and absent entirely on a database
+  // that hasn't had migration 0038 yet.
+  image_prompt?: string | null;
   status: ContentStatus;
   source: ContentSource;
   control_mode: ContentControlMode;

@@ -1,7 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, Unlock, Trash2, Copy, CalendarClock, Sparkles, ImagePlus, X, History, BarChart3, Wand2 } from "lucide-react";
+import {
+  Lock,
+  Unlock,
+  Trash2,
+  Copy,
+  CalendarClock,
+  Sparkles,
+  ImagePlus,
+  X,
+  History,
+  BarChart3,
+  Wand2,
+  Image as ImageIcon,
+} from "lucide-react";
 import { ActionForm } from "@/components/ActionForm";
 import { FormError } from "@/components/FormError";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -65,11 +78,13 @@ export function ContentItemCard({
   media,
   versions,
   aiPhotosAvailable,
+  productHint,
 }: {
   item: ContentItem;
   media: ContentMediaWithUrl[];
   versions: ContentVersion[];
   aiPhotosAvailable: boolean;
+  productHint: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
@@ -175,6 +190,20 @@ export function ContentItemCard({
                 defaultValue={item.hashtags.join(" ")}
                 placeholder="hashtag1 hashtag2"
               />
+              <div>
+                <label className="field-label" htmlFor={`edit-image-prompt-${item.id}`}>
+                  Picture description (what the image should show)
+                </label>
+                <textarea
+                  id={`edit-image-prompt-${item.id}`}
+                  className="field-input"
+                  name="imagePrompt"
+                  defaultValue={item.image_prompt ?? ""}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="Optional — e.g. a hand-made chocolate gift box on a wooden table, warm festive light"
+                />
+              </div>
               <div className="flex gap-2">
                 <SubmitButton className="btn-primary px-3 py-1.5 text-sm" pendingLabel="Saving…">
                   Save Edit
@@ -191,6 +220,14 @@ export function ContentItemCard({
           <p className="mb-1 whitespace-pre-line text-sm text-ink-800">{item.caption || "(no caption)"}</p>
           {item.hashtags.length > 0 && (
             <p className="mb-2 text-xs text-brand-600">{item.hashtags.map((h) => `#${h}`).join(" ")}</p>
+          )}
+          {item.image_prompt && (
+            <p className="mb-2 flex items-start gap-1.5 text-xs text-ink-500">
+              <ImageIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-400" />
+              <span>
+                <span className="font-medium text-ink-600">Picture idea:</span> {item.image_prompt}
+              </span>
+            </p>
           )}
         </>
       )}
@@ -408,7 +445,14 @@ export function ContentItemCard({
       )}
 
       {makingImage && canMakeGraphic && (
-        <CreativeStudioPanel itemId={item.id} aiAvailable={aiPhotosAvailable} hasGraphic={hasGraphic} />
+        <CreativeStudioPanel
+          itemId={item.id}
+          caption={item.caption}
+          imagePrompt={item.image_prompt ?? ""}
+          aiAvailable={aiPhotosAvailable}
+          hasGraphic={hasGraphic}
+          productHint={productHint}
+        />
       )}
 
       {addingMedia && (

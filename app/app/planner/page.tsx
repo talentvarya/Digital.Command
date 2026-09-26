@@ -9,6 +9,7 @@ import { CreateAllImagesButton } from "@/components/planner/CreateAllImagesButto
 import { summarizeInsights } from "@/lib/planner/insights";
 import { cloudflareImageConfigured } from "@/lib/creative/cloudflare";
 import { pickBatchItems } from "@/lib/creative/eligibility";
+import { firstProductPhrase } from "@/lib/creative/spec";
 import { PLANNER_WINDOW_OPTIONS, type PlannerWindow } from "@/lib/constants/content";
 import type { ContentMedia, ContentVersion } from "@/types/database";
 
@@ -50,12 +51,13 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
 
   const days = nextNDays(windowDays);
 
-  const [{ data: settings }, { data: items }] = await Promise.all([
+  const [{ data: settings }, { data: brand }, { data: items }] = await Promise.all([
     supabase
       .from("client_settings")
       .select("content_control_mode, approval_then_autopilot, autopilot_platforms")
       .eq("org_id", membership.org_id)
       .maybeSingle(),
+    supabase.from("brand_profiles").select("products_services").eq("org_id", membership.org_id).maybeSingle(),
     supabase
       .from("content_items")
       .select("*")
@@ -104,6 +106,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
   );
 
   const aiPhotosAvailable = cloudflareImageConfigured();
+  const productHint = firstProductPhrase(brand?.products_services);
   const batchItemIds = pickBatchItems(items ?? [], mediaByItem);
 
   const itemsByDay = new Map<string, typeof items>();
@@ -158,6 +161,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
             mediaByItem={mediaByItem}
             versionsByItem={versionsByItem}
             aiPhotosAvailable={aiPhotosAvailable}
+            productHint={productHint}
           />
         ))}
       </div>

@@ -11,6 +11,7 @@ interface World {
   item?: Record<string, unknown> | null;
   brand?: Record<string, unknown> | null;
   media?: { id: string; storage_path: string }[];
+  stillUsed?: { storage_path: string }[]; // other posts still pointing at a replaced file (e.g. a copy)
   uploadError?: string;
   attachError?: string;
   logoBytes?: Uint8Array | null;
@@ -18,7 +19,14 @@ interface World {
 
 // The member's own session client: reads the post and brand, stores the file, attaches it.
 function fakeMember(world: World) {
-  const calls = { uploads: [] as string[], removed: [] as string[], insertedMedia: [] as Record<string, unknown>[], deletedIds: [] as string[] };
+  let mediaReads = 0;
+  const calls = {
+    uploads: [] as string[],
+    removed: [] as string[],
+    insertedMedia: [] as Record<string, unknown>[],
+    deletedIds: [] as string[],
+    updatedItems: [] as Record<string, unknown>[],
+  };
   const item = world.item === undefined
     ? { id: "item-1", platform: "instagram", caption: "Flat 20% off on gift boxes. Order before Sunday.", status: "draft", locked: false, publish_status: "not_sent", scheduled_date: "2026-09-27", scheduled_time: "09:00:00" }
     : world.item;
@@ -27,6 +35,11 @@ function fakeMember(world: World) {
       const builder: Record<string, unknown> = {
         select: () => builder,
         eq: () => builder,
+        in: () => builder,
+        update: (payload: Record<string, unknown>) => {
+          if (table === "content_items") calls.updatedItems.push(payload);
+          return builder;
+        },
         maybeSingle: async () => ({
           data: table === "content_items" ? item : table === "brand_profiles" ? (world.brand ?? { colors: ["#5c3317"], logo_path: null, whatsapp: "+91 85888 38594", phone: null }) : { legal_name: "Aura Lux Chocolate Co." },
         }),
@@ -40,7 +53,12 @@ function fakeMember(world: World) {
             return { error: null };
           },
         }),
-        then: (resolve: (v: unknown) => unknown) => resolve({ data: world.media ?? [], error: null }),
+        then: (resolve: (v: unknown) => unknown) =>
+          resolve(
+            table === "content_media"
+              ? { data: mediaReads++ === 0 ? (world.media ?? []) : (world.stillUsed ?? []), error: null }
+              : { data: null, error: null }
+          ),
       };
       return builder;
     },
@@ -179,13 +197,14 @@ describe("createCreative — backgrounds", () => {
     });
 
     vi.mocked(deps.aiConfigured).mockReturnValue(true);
+    const described = { background: "ai" as const, imagePrompt: "a bar of dark chocolate on slate" };
     const full = fakeService({ org: AI_PHOTO_DAILY_LIMIT_PER_ORG, platform: 0 });
-    expect(await createCreative(fakeMember({}).client, full.client, input({ background: "ai" }), deps)).toMatchObject({
+    expect(await createCreative(fakeMember({}).client, full.client, input(described), deps)).toMatchObject({
       error: expect.stringMatching(/5:30 AM IST/),
     });
 
     vi.mocked(deps.generateAiImage).mockRejectedValue(new CloudflareImageError("The free AI photo allowance for today is used up.", "quota"));
-    expect(await createCreative(fakeMember({}).client, fakeService().client, input({ background: "ai" }), deps)).toEqual({
+    expect(await createCreative(fakeMember({}).client, fakeService().client, input(described), deps)).toEqual({
       error: "The free AI photo allowance for today is used up.",
     });
     expect(deps.render).not.toHaveBeenCalled();
@@ -217,6 +236,80 @@ describe("createCreative — backgrounds", () => {
   });
 });
 
+describe("createCreative — the picture description", () => {
+  const post = (extra: Record<string, unknown> = {}) => ({
+    id: "item-1",
+    platform: "facebook",
+    caption: "Meet our new hazelnut bar. Small-batch and fresh.",
+    status: "draft",
+    locked: false,
+    publish_status: "not_sent",
+    scheduled_date: "d",
+    scheduled_time: null,
+    ...extra,
+  });
+
+  it("makes the AI photo from what the client described, and saves the description on the post", async () => {
+    const member = fakeMember({ item: post() });
+    await createCreative(member.client, fakeService().client, input({ background: "ai", imagePrompt: "  Hazelnut bar\non a marble slab, moody light " }), deps);
+
+    const prompt = vi.mocked(deps.generateAiImage).mock.calls[0][0];
+    expect(prompt).toContain("The picture should show: Hazelnut bar on a marble slab, moody light.");
+    expect(member.calls.updatedItems).toEqual([{ image_prompt: "Hazelnut bar on a marble slab, moody light" }]);
+  });
+
+  it("refuses an explicit AI photo when nothing has been described", async () => {
+    const member = fakeMember({ item: post() });
+    const result = await createCreative(member.client, fakeService().client, input({ background: "ai" }), deps);
+    expect(result).toMatchObject({ error: expect.stringMatching(/Describe the picture you want first/) });
+    expect(deps.generateAiImage).not.toHaveBeenCalled();
+    expect(member.calls.uploads).toEqual([]);
+  });
+
+  it("uses the description already saved on the post (e.g. the AI's suggestion) when none is typed", async () => {
+    const member = fakeMember({ item: post({ image_prompt: "A slab of chocolate with hazelnuts scattered around" }) });
+    const result = await createCreative(member.client, fakeService().client, input({ background: "ai" }), deps);
+    expect(result).toMatchObject({ ok: true, background: "ai" });
+    expect(vi.mocked(deps.generateAiImage).mock.calls[0][0]).toContain("A slab of chocolate with hazelnuts scattered around");
+    expect(member.calls.updatedItems).toEqual([]); // nothing new to save
+  });
+
+  it("lets the client clear a saved description, falling back to the post's own words", async () => {
+    const member = fakeMember({ item: post({ image_prompt: "old idea" }) });
+    await createCreative(member.client, fakeService().client, input({ background: "auto", imagePrompt: "" }), deps);
+    expect(vi.mocked(deps.generateAiImage).mock.calls[0][0]).not.toContain("old idea");
+    expect(vi.mocked(deps.generateAiImage).mock.calls[0][0]).toContain("The post is about:");
+    expect(member.calls.updatedItems).toEqual([{ image_prompt: null }]);
+  });
+
+  it("searches stock photos using the description", async () => {
+    const member = fakeMember({ item: post() });
+    await createCreative(member.client, fakeService().client, input({ background: "stock", imagePrompt: "warm chocolate gift box on wooden table" }), deps);
+    expect(deps.findStockPhoto).toHaveBeenCalledWith("warm chocolate gift box on wooden");
+  });
+
+  it("puts the client's own words on the graphic when they changed them", async () => {
+    const member = fakeMember({ item: post() });
+    await createCreative(
+      member.client,
+      fakeService().client,
+      input({ background: "colors", headline: "New: Hazelnut Praline Bar 🍫 #new", subline: "" }),
+      deps
+    );
+    const spec = vi.mocked(deps.render).mock.calls[0][0];
+    expect(spec.headline).toBe("New: Hazelnut Praline Bar");
+    expect(spec.subline).toBeNull(); // an emptied second line means none
+  });
+
+  it("uses the caption's words for anything the client didn't send", async () => {
+    const member = fakeMember({ item: post() });
+    await createCreative(member.client, fakeService().client, input({ background: "colors" }), deps);
+    const spec = vi.mocked(deps.render).mock.calls[0][0];
+    expect(spec.headline).toBe("Meet our new hazelnut bar");
+    expect(spec.subline).toBe("Small-batch and fresh.");
+  });
+});
+
 describe("createCreative — saving", () => {
   it("stores the graphic, attaches it, and swaps out only the pictures it replaces", async () => {
     const member = fakeMember({
@@ -236,6 +329,21 @@ describe("createCreative — saving", () => {
     ]);
     expect(member.calls.deletedIds.sort()).toEqual(["m-old", "m-stock"]); // the client's own photo is untouched
     expect(member.calls.removed.sort()).toEqual(["org-1/a-unsplash.jpg", "org-1/b-creative.jpg"]);
+  });
+
+  it("keeps a replaced file that another post still uses (a copied post shares the same stored file)", async () => {
+    const member = fakeMember({
+      media: [
+        { id: "m-shared", storage_path: "org-1/shared-creative.jpg" },
+        { id: "m-alone", storage_path: "org-1/alone-unsplash.jpg" },
+      ],
+      stillUsed: [{ storage_path: "org-1/shared-creative.jpg" }],
+    });
+    const result = await createCreative(member.client, fakeService().client, input({ background: "colors" }), deps);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(member.calls.deletedIds.sort()).toEqual(["m-alone", "m-shared"]); // this post lets go of both...
+    expect(member.calls.removed).toEqual(["org-1/alone-unsplash.jpg"]); // ...but only the file nobody else uses is deleted
   });
 
   it("uses the client's logo when Brand Brain has one", async () => {

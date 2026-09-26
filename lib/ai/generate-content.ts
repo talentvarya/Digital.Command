@@ -14,15 +14,19 @@ export interface GenerateCaptionParams {
 export interface GeneratedCaption {
   caption: string;
   hashtags: string[];
+  // A one-sentence description of a picture that would suit the post — used as the
+  // starting point for its image. Null when the model didn't give one.
+  imageIdea: string | null;
   usage: AiUsage;
 }
 
 function buildSystemPrompt(brandProfile: BrandProfile | null): string {
   const lines = [
     "You are a social media copywriter working for a client's marketing team.",
-    "Write one short, ready-to-post caption plus a matching set of hashtags.",
-    'Respond with ONLY a single JSON object of the exact shape {"caption": string, "hashtags": string[]} — no markdown fences, no commentary.',
+    "Write one short, ready-to-post caption plus a matching set of hashtags, and an idea for its picture.",
+    'Respond with ONLY a single JSON object of the exact shape {"caption": string, "hashtags": string[], "image_idea": string} — no markdown fences, no commentary.',
     "Hashtags should not include the # symbol; the app adds it when displaying.",
+    'image_idea: one sentence (at most 30 words, in English even if the caption is not) describing a picture that suits the post — its subject, setting and mood. Describe only what should be visible; no text, logos or brand names in the picture, and no real people or celebrities.',
   ];
 
   if (brandProfile) {
@@ -64,18 +68,19 @@ function buildUserPrompt(params: GenerateCaptionParams): string {
   return lines.join("\n");
 }
 
-function parseResponse(text: string): Omit<GeneratedCaption, "usage"> {
+export function parseResponse(text: string): Omit<GeneratedCaption, "usage"> {
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text);
     if (typeof parsed.caption === "string") {
       const hashtags = Array.isArray(parsed.hashtags) ? parsed.hashtags.filter((h: unknown) => typeof h === "string") : [];
-      return { caption: parsed.caption, hashtags };
+      const idea = typeof parsed.image_idea === "string" ? parsed.image_idea.replace(/\s+/g, " ").trim().slice(0, 400) : "";
+      return { caption: parsed.caption, hashtags, imageIdea: idea || null };
     }
   } catch {
     // fall through to plain-text fallback below
   }
-  return { caption: text.trim(), hashtags: [] };
+  return { caption: text.trim(), hashtags: [], imageIdea: null };
 }
 
 // opts?.provider is only ever passed by assistant-tools.ts's regenerate_content

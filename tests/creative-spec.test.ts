@@ -7,6 +7,7 @@ import {
   defaultSizeFor,
   deriveCreativeText,
   estimateLines,
+  firstProductPhrase,
   isReplaceableMedia,
   normalizeHex,
   pickFontSize,
@@ -192,6 +193,38 @@ describe("buildImagePrompt", () => {
   it("stays within its length limit even with huge inputs", () => {
     const prompt = buildImagePrompt({ headline: "h".repeat(5000), businessName: "b".repeat(5000), businessDescription: "d".repeat(5000), imageStyle: "s".repeat(5000) });
     expect(prompt.length).toBeLessThanOrEqual(1200);
+  });
+
+  it("leads with the client's own description and keeps the post as context", () => {
+    const prompt = buildImagePrompt({
+      headline: "Weekend offer",
+      businessName: "Aura Lux",
+      subject: "A hand-made gift box  on a wooden table,\nwarm festive light",
+    });
+    expect(prompt).toContain("The picture should show: A hand-made gift box on a wooden table, warm festive light.");
+    expect(prompt).toContain("the post is about: Weekend offer");
+  });
+
+  it("asks for a photograph unless the client wanted an illustration, a render or similar", () => {
+    const base = { headline: "h", businessName: "b" };
+    expect(buildImagePrompt({ ...base, subject: "a chocolate bar" })).toContain("Photorealistic photograph.");
+    expect(buildImagePrompt({ ...base, subject: "a flat design illustration of a chocolate bar" })).not.toContain("Photorealistic");
+    expect(buildImagePrompt({ ...base, subject: "a chocolate bar", imageStyle: "3D render, pastel" })).not.toContain("Photorealistic");
+  });
+});
+
+describe("firstProductPhrase", () => {
+  it("takes the first product or service from a Brand Brain list", () => {
+    expect(firstProductPhrase("Handmade chocolates, gift boxes, hampers")).toBe("Handmade chocolates");
+    expect(firstProductPhrase("1. Wedding planning\n2. Corporate events")).toBe("Wedding planning");
+    expect(firstProductPhrase("• Bespoke cakes | Cupcakes")).toBe("Bespoke cakes");
+  });
+
+  it("gives an empty string when there is nothing usable, and shortens a very long entry", () => {
+    expect(firstProductPhrase("")).toBe("");
+    expect(firstProductPhrase(null)).toBe("");
+    expect(firstProductPhrase(" ,, ; ")).toBe("");
+    expect(firstProductPhrase("a really extraordinarily long product description that never seems to end").length).toBeLessThanOrEqual(40);
   });
 });
 

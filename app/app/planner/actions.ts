@@ -20,6 +20,7 @@ import {
 import { dispatchToPublisher } from "@/lib/publishing/dispatch";
 import { resolveDueAt } from "@/lib/publishing/schedule";
 import { computeBufferState, slotKey } from "@/lib/planner/buffer";
+import { cleanFreeText, tryWithOptionalColumn } from "@/lib/planner/optional-column";
 import { attachUnsplashPhoto, captionToImageQuery } from "@/lib/unsplash/attach";
 import { getBufferPostStatus, getBufferPostMetrics, BufferApiError } from "@/lib/buffer/client";
 import { getValidAccessToken } from "@/lib/google/oauth";
@@ -100,23 +101,26 @@ export async function generateOneSlot(
 
   let savedItem: ContentItem;
   if (!itemId) {
-    const { data: newItem, error } = await supabase
-      .from("content_items")
-      .insert({
-        org_id: orgId,
-        platform,
-        scheduled_date: scheduledDate,
-        scheduled_time: params.scheduledTime ?? null,
-        caption: generated.caption,
-        hashtags: generated.hashtags,
-        status,
-        source: "ai_generated",
-        control_mode: controlMode,
-        rejection_count: attemptNumber,
-        created_by: userId,
-      })
-      .select("*")
-      .single();
+    const newRow = {
+      org_id: orgId,
+      platform,
+      scheduled_date: scheduledDate,
+      scheduled_time: params.scheduledTime ?? null,
+      caption: generated.caption,
+      hashtags: generated.hashtags,
+      status,
+      source: "ai_generated",
+      control_mode: controlMode,
+      rejection_count: attemptNumber,
+      created_by: userId,
+    };
+    // The AI's suggested picture (image_prompt) needs migration 0038; without it
+    // the post is still created, just without the idea.
+    const { data: newItem, error } = await tryWithOptionalColumn(
+      "image_prompt",
+      () => supabase.from("content_items").insert({ ...newRow, image_prompt: generated.imageIdea }).select("*").single(),
+      () => supabase.from("content_items").insert(newRow).select("*").single()
+    );
     if (error || !newItem) return { error: error?.message ?? "Could not create content item." };
     itemId = newItem.id;
     savedItem = newItem;
@@ -136,6 +140,13 @@ export async function generateOneSlot(
       .single();
     if (error || !updatedItem) return { error: error?.message ?? "Could not update content item." };
     savedItem = updatedItem;
+
+    // A regenerated caption keeps whatever picture description the post already has
+    // (the client may have written it); the AI's idea only fills an empty one.
+    // Best-effort, and harmless before migration 0038 (the column isn't there yet).
+    if (generated.imageIdea) {
+      await supabase.from("content_items").update({ image_prompt: generated.imageIdea }).eq("id", itemId).is("image_prompt", null);
+    }
   }
   if (!itemId) return { error: "Could not resolve content item id." };
 
@@ -179,7 +190,7 @@ export async function generateOneSlot(
     await attachUnsplashPhoto(supabase, {
       orgId,
       contentItemId: itemId,
-      query: captionToImageQuery(generated.caption, platform),
+      query: captionToImageQuery(generated.imageIdea ?? generated.caption, platform),
     });
   }
 
@@ -456,14 +467,21 @@ export async function editContentAction(_prevState: ActionResult, formData: Form
   const id = formData.get("id") as string;
   const caption = (formData.get("caption") as string) ?? "";
   const hashtags = parseHashtags(formData.get("hashtags"));
+  // The picture description is optional on this form; only touch it when the field was sent.
+  const hasImagePrompt = formData.has("imagePrompt");
+  const imagePrompt = cleanFreeText(formData.get("imagePrompt"), 500);
 
   const { data: item } = await supabase.from("content_items").select("locked").eq("id", id).single();
   if (item?.locked) return { error: "This item is locked and can't be edited." };
 
-  const { error } = await supabase
-    .from("content_items")
-    .update({ caption, hashtags, updated_at: new Date().toISOString() })
-    .eq("id", id);
+  const base = { caption, hashtags, updated_at: new Date().toISOString() };
+  const { error } = hasImagePrompt
+    ? await tryWithOptionalColumn(
+        "image_prompt",
+        () => supabase.from("content_items").update({ ...base, image_prompt: imagePrompt }).eq("id", id),
+        () => supabase.from("content_items").update(base).eq("id", id)
+      )
+    : await supabase.from("content_items").update(base).eq("id", id);
   if (error) return { error: error.message };
 
   const { data: versionRows } = await supabase
@@ -748,6 +766,8 @@ export async function copyContentItemAction(_prevState: ActionResult, formData: 
       scheduled_date: targetDate,
       caption: source.caption,
       hashtags: source.hashtags,
+      // Only present once migration 0038 is in; spread so an older database never sees the column.
+      ...(source.image_prompt ? { image_prompt: source.image_prompt } : {}),
       status: "draft",
       source: source.source,
       control_mode: source.control_mode,

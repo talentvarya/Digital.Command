@@ -38,6 +38,11 @@ export async function createCreativeAction(_prevState: ActionResult, formData: F
     style: pick(formData.get("style"), ["auto", ...CREATIVE_STYLES] as const, "auto"),
     background: pick(formData.get("background"), BACKGROUNDS, "auto"),
     size: pick(formData.get("size"), SIZES, "auto"),
+    // Only forwarded when the form sent them (the batch button doesn't), so a post's
+    // saved description and the caption's own words are used unless the client changed them.
+    imagePrompt: formData.has("imagePrompt") ? String(formData.get("imagePrompt") ?? "") : undefined,
+    headline: formData.has("headline") ? String(formData.get("headline") ?? "") : undefined,
+    subline: formData.has("subline") ? String(formData.get("subline") ?? "") : undefined,
   });
   if ("error" in result) return { error: result.error };
 
