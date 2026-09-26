@@ -751,3 +751,16 @@ export interface RoadmapLead {
   created_at: string;
   updated_at: string;
 }
+
+// One row per post graphic made (Creative Studio). Written only by server code;
+// clients can read their own rows. AI-photo rows drive the daily free-tier limits.
+export interface CreativeGeneration {
+  id: string;
+  org_id: string;
+  content_item_id: string | null;
+  kind: "template" | "ai_photo";
+  provider: string;
+  style: string | null;
+  created_by: string | null;
+  created_at: string;
+}

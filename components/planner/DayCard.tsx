@@ -8,11 +8,13 @@ export function DayCard({
   items,
   mediaByItem,
   versionsByItem,
+  aiPhotosAvailable,
 }: {
   date: string;
   items: ContentItem[];
   mediaByItem: Map<string, ContentMediaWithUrl[]>;
   versionsByItem: Map<string, ContentVersion[]>;
+  aiPhotosAvailable: boolean;
 }) {
   const label = new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
     weekday: "long",
@@ -25,7 +27,13 @@ export function DayCard({
       <h3 className="font-semibold text-ink-900">{label}</h3>
       {items.length === 0 && <p className="text-sm text-ink-400">Nothing planned yet.</p>}
       {items.map((item) => (
-        <ContentItemCard key={item.id} item={item} media={mediaByItem.get(item.id) ?? []} versions={versionsByItem.get(item.id) ?? []} />
+        <ContentItemCard
+          key={item.id}
+          item={item}
+          media={mediaByItem.get(item.id) ?? []}
+          versions={versionsByItem.get(item.id) ?? []}
+          aiPhotosAvailable={aiPhotosAvailable}
+        />
       ))}
       <NewContentForm date={date} />
     </div>

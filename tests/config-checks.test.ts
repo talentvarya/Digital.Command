@@ -50,6 +50,14 @@ describe("getConfigChecks / missingRequired", () => {
     expect(missingRequired(checks)).toEqual([]);
   });
 
+  it("lists the free AI-photo service as optional and needs both its account id and token", () => {
+    const find = (env: Record<string, string>) => getConfigChecks({ ...FULL_ENV, ...env }).find((c) => c.key.startsWith("CLOUDFLARE_ACCOUNT_ID"));
+    expect(find({})?.required).toBe(false);
+    expect(find({})?.set).toBe(false);
+    expect(find({ CLOUDFLARE_ACCOUNT_ID: "acct" })?.set).toBe(false);
+    expect(find({ CLOUDFLARE_ACCOUNT_ID: "acct", CLOUDFLARE_AI_API_TOKEN: "tok" })?.set).toBe(true);
+  });
+
   it("never includes a setting's value in its output", () => {
     const serialized = JSON.stringify(getConfigChecks({ ...FULL_ENV, BUFFER_ACCESS_TOKEN: "super-secret-token" }));
     expect(serialized).not.toContain("super-secret-token");

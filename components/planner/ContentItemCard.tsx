@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, Unlock, Trash2, Copy, CalendarClock, Sparkles, ImagePlus, X, History, BarChart3 } from "lucide-react";
+import { Lock, Unlock, Trash2, Copy, CalendarClock, Sparkles, ImagePlus, X, History, BarChart3, Wand2 } from "lucide-react";
 import { ActionForm } from "@/components/ActionForm";
 import { FormError } from "@/components/FormError";
 import { SubmitButton } from "@/components/SubmitButton";
 import { StatusBadge } from "@/components/StatusBadge";
+import { CreativeStudioPanel } from "@/components/planner/CreativeStudioPanel";
+import { graphicBlockedReason } from "@/lib/creative/eligibility";
 import {
   generateAiContentAction,
   editContentAction,
@@ -58,13 +60,26 @@ function SendNowButton({ id, label }: { id: string; label: string }) {
   );
 }
 
-export function ContentItemCard({ item, media, versions }: { item: ContentItem; media: ContentMediaWithUrl[]; versions: ContentVersion[] }) {
+export function ContentItemCard({
+  item,
+  media,
+  versions,
+  aiPhotosAvailable,
+}: {
+  item: ContentItem;
+  media: ContentMediaWithUrl[];
+  versions: ContentVersion[];
+  aiPhotosAvailable: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
   const [copying, setCopying] = useState(false);
   const [addingMedia, setAddingMedia] = useState(false);
+  const [makingImage, setMakingImage] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const canMakeGraphic = graphicBlockedReason(item) === null;
+  const hasGraphic = media.some((m) => m.storage_path.includes("-creative."));
 
   const needsSuggestion = item.rejection_count >= REJECTIONS_BEFORE_SUGGESTION;
   const finalRoundUsed = item.rejection_count > REJECTIONS_BEFORE_SUGGESTION;
@@ -184,7 +199,7 @@ export function ContentItemCard({ item, media, versions }: { item: ContentItem; 
         <div className="mb-3 flex flex-wrap gap-2">
           {media.map((m) =>
             m.media_type === "image" && m.signedUrl ? (
-              <div key={m.id} className="group relative h-20 w-20 overflow-hidden rounded-lg border border-ink-100">
+              <div key={m.id} className="group relative h-28 w-28 overflow-hidden rounded-lg border border-ink-100">
                 {/* eslint-disable-next-line @next/next/no-img-element -- signed URL, not a static asset next/image can optimize */}
                 <img src={m.signedUrl} alt="" className="h-full w-full object-cover" />
                 <ActionForm action={removeContentMediaAction}>
@@ -287,6 +302,11 @@ export function ContentItemCard({ item, media, versions }: { item: ContentItem; 
             </ActionForm>
           )}
 
+          {canMakeGraphic && (
+            <button className="btn-secondary px-3 py-1.5 text-xs" onClick={() => setMakingImage((v) => !v)}>
+              <Wand2 className="mr-1 inline h-3 w-3" /> {hasGraphic ? "New image" : "Create image"}
+            </button>
+          )}
           <button className="btn-secondary px-3 py-1.5 text-xs" onClick={() => setAddingMedia((v) => !v)}>
             <ImagePlus className="mr-1 inline h-3 w-3" /> Media
           </button>
@@ -385,6 +405,10 @@ export function ContentItemCard({ item, media, versions }: { item: ContentItem; 
             </>
           )}
         </ActionForm>
+      )}
+
+      {makingImage && canMakeGraphic && (
+        <CreativeStudioPanel itemId={item.id} aiAvailable={aiPhotosAvailable} hasGraphic={hasGraphic} />
       )}
 
       {addingMedia && (

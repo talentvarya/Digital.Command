@@ -93,6 +93,13 @@ export function getConfigChecks(env: Env): ConfigCheck[] {
       ifMissing: "Planner posts don't get an automatic stock photo.",
     },
     {
+      key: "CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_AI_API_TOKEN",
+      label: "Cloudflare Workers AI (free AI photos for post graphics)",
+      required: false,
+      set: has(env, "CLOUDFLARE_ACCOUNT_ID") && has(env, "CLOUDFLARE_AI_API_TOKEN"),
+      ifMissing: "The \"AI photo\" background in Create image is unavailable; brand-colour and stock-photo graphics still work.",
+    },
+    {
       key: "GOOGLE_CUSTOM_SEARCH_API_KEY + GOOGLE_CUSTOM_SEARCH_ENGINE_ID",
       label: "Google Custom Search (brand-mention search)",
       required: false,

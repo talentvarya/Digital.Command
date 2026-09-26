@@ -22,7 +22,9 @@ Settings → Environment Variables. A change only takes effect on the **next dep
 | `BUFFER_ACCESS_TOKEN` | For publishing | Facebook/Instagram posts are never sent; content stays "Scheduled" |
 | `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` | For Google connections | Search Console, Analytics and YouTube can't be connected |
 | `TOKEN_ENCRYPTION_KEY` | Recommended | Google/Apify tokens saved afterwards are stored as readable text. **Set once, never change or lose it** — see `SECURITY_AND_RLS.md` |
-| `UNSPLASH_ACCESS_KEY` | No | Planner posts get no automatic stock photo |
+| `UNSPLASH_ACCESS_KEY` | No | Planner posts get no automatic stock photo, and Create image can't use stock photos |
+| `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_AI_API_TOKEN` | No | The free "AI photo" background in Create image is unavailable (brand-colour and stock-photo graphics still work). Free Cloudflare account; token needs only the "Workers AI" permission |
+| `CREATIVE_AI_DAILY_LIMIT` | No | Platform-wide cap on AI photos per day; default 150, safely under the free allowance (~170+/day). Raise it after upgrading the Cloudflare plan |
 | `GOOGLE_CUSTOM_SEARCH_API_KEY` + `GOOGLE_CUSTOM_SEARCH_ENGINE_ID` | No | Brand-mention search is unavailable |
 | `NEXT_PUBLIC_VMG_WHATSAPP_NUMBER` | No | The roadmap page's WhatsApp button stays disabled. Digits only with country code, e.g. `919876543210` |
 | `NEXT_PUBLIC_VMG_PHONE` | No | The roadmap page's "Call now" button falls back to email. e.g. `+919876543210` |
@@ -39,7 +41,7 @@ Settings → Environment Variables. A change only takes effect on the **next dep
 
 Supabase → SQL Editor → paste the **contents** of each file (never the file name) and run, in numeric order. Each one can be skipped if already applied.
 
-`0001` → `0036` in `supabase/migrations/`. The latest four (`0033` Buffer insights, `0034` protected `client_settings` columns, `0035` cron log, `0036` AI-answer checks) are safe to re-run.
+`0001` → `0037` in `supabase/migrations/`. The latest five (`0033` Buffer insights, `0034` protected `client_settings` columns, `0035` cron log, `0036` AI-answer checks, `0037` Creative Studio usage log) are safe to re-run. Until `0037` is applied, AI photos are refused (they fail closed, because their daily usage can't be counted); brand-colour and stock-photo graphics still work.
 
 After the migrations, run `supabase/tests/tenant_isolation_test.sql` (as its own query or pasted right after them — both are safe). It returns a result table: expect `Cross-tenant leaks found: 0`, the admin-column line to read `PROTECTED`, and the last line `RESULT: PASS`. `FAIL`, `NOT RUN` or `TEST INVALID` mean something needs a look. This is the empirical two-client isolation check; run it again after any change to policies. Last live result (2026-09-22): PASS on 36 tables. (The same test also runs automatically on every push against an in-memory copy built from the migration files — that catches a bad migration, but only this live run can see a difference between the files and the real project.)
 
@@ -49,8 +51,9 @@ After the migrations, run `supabase/tests/tenant_isolation_test.sql` (as its own
 2. Admin → Dashboard: no red or amber job banner (after the first 03:00 UTC run, the Config Health page shows the nightly job as Healthy).
 3. Register a throwaway client, walk it through payment and Super Admin approval, and confirm the dashboard opens.
 4. Planner: generate a post; open it; check the time reads as the intended IST slot.
-5. Link a Buffer channel for a **test** client and use "Send now" on a scheduled post — only ever to a test channel, never to a real client's page without their say-so.
-6. If `TOKEN_ENCRYPTION_KEY` is set: connect Google (or an Apify token) on a test client and confirm the connection works, then confirm the stored value in `google_connections` / `apify_connections` starts with `enc:v1:`.
+5. Creative Studio: on a test client's post press **Create image** (Background: Brand colours) — a graphic with the post's words and the client's colours/logo should appear on the post. With the Cloudflare variables set, repeat with **AI photo**; the first real call is also the check that Cloudflare's response is read correctly.
+6. Link a Buffer channel for a **test** client and use "Send now" on a scheduled post — only ever to a test channel, never to a real client's page without their say-so.
+7. If `TOKEN_ENCRYPTION_KEY` is set: connect Google (or an Apify token) on a test client and confirm the connection works, then confirm the stored value in `google_connections` / `apify_connections` starts with `enc:v1:`.
 
 ## 5. Things that need a person, not code
 

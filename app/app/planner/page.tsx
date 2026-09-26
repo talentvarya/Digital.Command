@@ -5,9 +5,16 @@ import { DayCard } from "@/components/planner/DayCard";
 import { WindowSelector } from "@/components/planner/WindowSelector";
 import { ClearPlannerButton } from "@/components/planner/ClearPlannerButton";
 import { InsightsSummary } from "@/components/planner/InsightsSummary";
+import { CreateAllImagesButton } from "@/components/planner/CreateAllImagesButton";
 import { summarizeInsights } from "@/lib/planner/insights";
+import { cloudflareImageConfigured } from "@/lib/creative/cloudflare";
+import { pickBatchItems } from "@/lib/creative/eligibility";
 import { PLANNER_WINDOW_OPTIONS, type PlannerWindow } from "@/lib/constants/content";
 import type { ContentMedia, ContentVersion } from "@/types/database";
+
+// Making a post graphic (especially an AI photo) can take a while; the default
+// serverless limit is shorter than that.
+export const maxDuration = 60;
 
 export type ContentMediaWithUrl = ContentMedia & { signedUrl: string | null };
 
@@ -96,6 +103,9 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
     }))
   );
 
+  const aiPhotosAvailable = cloudflareImageConfigured();
+  const batchItemIds = pickBatchItems(items ?? [], mediaByItem);
+
   const itemsByDay = new Map<string, typeof items>();
   (items ?? []).forEach((item) => {
     const list = itemsByDay.get(item.scheduled_date) ?? [];
@@ -126,6 +136,8 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
         autopilotPlatforms={settings?.autopilot_platforms ?? []}
       />
 
+      <CreateAllImagesButton itemIds={batchItemIds} aiAvailable={aiPhotosAvailable} />
+
       {insights.publishedCount > 0 && (
         <InsightsSummary
           startDate={days[0]}
@@ -139,7 +151,14 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
 
       <div className="space-y-4">
         {days.map((date) => (
-          <DayCard key={date} date={date} items={itemsByDay.get(date) ?? []} mediaByItem={mediaByItem} versionsByItem={versionsByItem} />
+          <DayCard
+            key={date}
+            date={date}
+            items={itemsByDay.get(date) ?? []}
+            mediaByItem={mediaByItem}
+            versionsByItem={versionsByItem}
+            aiPhotosAvailable={aiPhotosAvailable}
+          />
         ))}
       </div>
     </div>
