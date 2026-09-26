@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit/log";
 import { countIssues, generateReportNarrative, type ReportMetricsInput } from "@/lib/ai/generate-report";
 import { AiGenerationError } from "@/lib/ai/client";
 import { logAiUsage } from "@/lib/ai/log-usage";
+import { addDays, istDateString } from "@/lib/utils/ist";
 import type { ActionResult } from "@/app/register/actions";
 
 export async function generateReportAction(_prevState: ActionResult, formData: FormData): Promise<ActionResult> {
@@ -16,11 +17,9 @@ export async function generateReportAction(_prevState: ActionResult, formData: F
   const { userId, orgId } = member;
 
   const periodDays = Number(formData.get("periodDays")) || 14;
-  const periodEnd = new Date();
-  const periodStart = new Date(periodEnd);
-  periodStart.setDate(periodStart.getDate() - periodDays);
-  const periodStartStr = periodStart.toISOString().slice(0, 10);
-  const periodEndStr = periodEnd.toISOString().slice(0, 10);
+  // Counted back from today in India (the server's own date is still yesterday's until 5:30 AM IST).
+  const periodEndStr = istDateString();
+  const periodStartStr = addDays(periodEndStr, -periodDays);
 
   const [{ data: audits }, { data: scSnapshots }, { data: gaSnapshots }, { data: content }] = await Promise.all([
     supabase.from("seo_audits").select("score, issues, crawled_at").eq("org_id", orgId).order("crawled_at", { ascending: false }).limit(2),

@@ -6,6 +6,7 @@ import { requireOrgMember } from "@/lib/auth/require-org-member";
 import { isEmergencyFrozen } from "@/lib/automation/guard";
 import { runAssistantChat, type AssistantChatMessage } from "@/lib/ai/assistant-chat";
 import { AiGenerationError } from "@/lib/ai/client";
+import { istDateString } from "@/lib/utils/ist";
 
 // Not the usual (prevState, FormData) => ActionResult shape every other
 // action in this app uses — a chat transcript is a growing list, not a
@@ -35,7 +36,7 @@ export async function sendAssistantMessageAction(
       .from("content_items")
       .select("scheduled_date, platform, status, caption")
       .eq("org_id", orgId)
-      .gte("scheduled_date", new Date().toISOString().slice(0, 10))
+      .gte("scheduled_date", istDateString())
       .order("scheduled_date", { ascending: true })
       .limit(10),
   ]);

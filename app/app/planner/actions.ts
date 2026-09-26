@@ -21,6 +21,7 @@ import { dispatchToPublisher } from "@/lib/publishing/dispatch";
 import { resolveDueAt } from "@/lib/publishing/schedule";
 import { computeBufferState, slotKey } from "@/lib/planner/buffer";
 import { cleanFreeText, tryWithOptionalColumn } from "@/lib/planner/optional-column";
+import { istDateString, nextDays } from "@/lib/utils/ist";
 import { attachUnsplashPhoto, captionToImageQuery } from "@/lib/unsplash/attach";
 import { getBufferPostStatus, getBufferPostMetrics, BufferApiError } from "@/lib/buffer/client";
 import { getValidAccessToken } from "@/lib/google/oauth";
@@ -332,13 +333,7 @@ export async function fillAutopilotBuffer(
   const { orgId, userId, platforms, controlMode, brand } = params;
   let remaining = params.remainingCap;
 
-  const days: string[] = [];
-  const today = new Date();
-  for (let i = 0; i < AUTOPILOT_BUFFER_DAYS; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    days.push(d.toISOString().slice(0, 10));
-  }
+  const days = nextDays(AUTOPILOT_BUFFER_DAYS);
 
   const { data: existing } = await supabase
     .from("content_items")
@@ -1087,7 +1082,7 @@ export async function setControlModeAction(_prevState: ActionResult, formData: F
     .update({
       content_control_mode: mode,
       approval_then_autopilot: approvalThenAutopilot,
-      autopilot_since: mode === "autopilot" ? new Date().toISOString().slice(0, 10) : null,
+      autopilot_since: mode === "autopilot" ? istDateString() : null,
       autopilot_platforms: autopilotPlatforms,
     })
     .eq("org_id", member.orgId);

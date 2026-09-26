@@ -11,6 +11,7 @@ import { cloudflareImageConfigured } from "@/lib/creative/cloudflare";
 import { pickBatchItems } from "@/lib/creative/eligibility";
 import { firstProductPhrase } from "@/lib/creative/spec";
 import { PLANNER_WINDOW_OPTIONS, type PlannerWindow } from "@/lib/constants/content";
+import { nextDays } from "@/lib/utils/ist";
 import type { ContentMedia, ContentVersion } from "@/types/database";
 
 // Making a post graphic (especially an AI photo) can take a while; the default
@@ -18,17 +19,6 @@ import type { ContentMedia, ContentVersion } from "@/types/database";
 export const maxDuration = 60;
 
 export type ContentMediaWithUrl = ContentMedia & { signedUrl: string | null };
-
-function nextNDays(n: number): string[] {
-  const days: string[] = [];
-  const today = new Date();
-  for (let i = 0; i < n; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    days.push(d.toISOString().slice(0, 10));
-  }
-  return days;
-}
 
 export default async function PlannerPage({ searchParams }: { searchParams: { days?: string } }) {
   const supabase = createClient();
@@ -49,7 +39,8 @@ export default async function PlannerPage({ searchParams }: { searchParams: { da
     ? (requestedWindow as PlannerWindow)
     : 7;
 
-  const days = nextNDays(windowDays);
+  // Counted from today in India, even in the small hours when the server's own date is still yesterday's.
+  const days = nextDays(windowDays);
 
   const [{ data: settings }, { data: brand }, { data: items }] = await Promise.all([
     supabase

@@ -68,7 +68,7 @@ to post? Do people who message me get a reply? Do my reviews look good?" — and
 | Item | Status |
 | --- | --- |
 | Rejecting or skipping a post was logged as `content_rejectd` / `content_skipd` (a typo). | Done — new entries are spelt correctly and old ones still read correctly in the activity feed. |
-| The planner works out "today" from the server's UTC date, so between midnight and 5:30 AM India time it can be a day behind. The Command Center already uses India time; the planner and the publishing job should too. | To do |
+| The planner worked out "today" from the server's UTC date, so between midnight and 5:30 AM India time it was a day behind (the planner's first day, the Autopilot fill, the assistant's idea of "today", a report's end date, and the send-pending-posts job). All now count from today in India (`lib/utils/ist.ts`). | Done |
 | Every new table in this roadmap must pass the tenant-isolation test (`supabase/tests/tenant_isolation_test.sql`, run in CI) before release. | Standing rule |
 
 ## Not doing

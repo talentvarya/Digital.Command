@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAnthropicClient, HAIKU_MODEL, AiGenerationError, readableApiErrorMessage } from "@/lib/ai/client";
 import { ASSISTANT_TOOLS, executeAssistantTool, type AssistantContext } from "@/lib/ai/assistant-tools";
 import { logAiUsage } from "@/lib/ai/log-usage";
+import { istDateString } from "@/lib/utils/ist";
 
 export interface AssistantChatMessage {
   role: "user" | "assistant";
@@ -14,7 +15,8 @@ export interface AssistantChatMessage {
 const MAX_TOOL_ROUNDS = 5;
 
 function buildSystemPrompt(contextSummary: string): string {
-  const today = new Date().toISOString().slice(0, 10);
+  // The client's date (India), so "tomorrow" is right even in the small hours.
+  const today = istDateString();
   return [
     `You are Digital Command's in-app AI assistant for one client's marketing account. Today's date is ${today} — compute relative dates ("tomorrow", "next week") yourself and pass explicit YYYY-MM-DD dates to tools.`,
     contextSummary,

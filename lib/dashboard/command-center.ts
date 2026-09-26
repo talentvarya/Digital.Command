@@ -4,24 +4,15 @@
 // of it is unit-tested.
 
 import { pickBatchItems } from "@/lib/creative/eligibility";
+import { IST_OFFSET_MINUTES, addDays, istDateString } from "@/lib/utils/ist";
 
-// India has no daylight saving, so a fixed offset is exact.
-const IST_OFFSET_MINUTES = 330;
+// Date helpers live in lib/utils/ist.ts; re-exported here for the pages that already use them.
+export { addDays, istDateString };
+
 const DAY_MS = 86_400_000;
-
-// A YYYY-MM-DD date moved forward (or back) by whole days.
-export function addDays(date: string, days: number): string {
-  return new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
-}
 
 function istHour(now: Date): number {
   return new Date(now.getTime() + IST_OFFSET_MINUTES * 60_000).getUTCHours();
-}
-
-// Today's date in India as YYYY-MM-DD — what "today" means to the client, even
-// when the server (UTC) is still on the previous day.
-export function istDateString(now: Date): string {
-  return new Date(now.getTime() + IST_OFFSET_MINUTES * 60_000).toISOString().slice(0, 10);
 }
 
 export function greetingFor(now: Date): string {

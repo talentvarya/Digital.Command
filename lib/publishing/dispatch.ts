@@ -5,6 +5,7 @@ import { getValidAccessToken } from "@/lib/google/oauth";
 import { logAudit } from "@/lib/audit/log";
 import { checkAutomationAllowed } from "@/lib/automation/guard";
 import { resolveDueAt } from "@/lib/publishing/schedule";
+import { istDateString } from "@/lib/utils/ist";
 import type { ContentItem, ContentPlatform } from "@/types/database";
 
 const SEVEN_DAYS_SECONDS = 7 * 24 * 60 * 60;
@@ -76,7 +77,7 @@ export async function flushPendingPublishing(
   orgId: string,
   platform?: ContentPlatform
 ): Promise<{ attempted: number; sent: number }> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istDateString();
   let query = supabase
     .from("content_items")
     .select("*")
